@@ -15,8 +15,35 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
   const [lienOriginal, setLienOriginal] = useState("");
   const [localisation, setLocalisation] = useState("");
   const [description, setDescription] = useState("");
+  const [texteColle, setTexteColle] = useState("");
+  const [extraction, setExtraction] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
+
+  async function extraireAutomatiquement() {
+    if (!texteColle.trim()) return;
+    setErreur(null);
+    setExtraction(true);
+    try {
+      const res = await fetch("/api/offres/extraire", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ texte: texteColle }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'extraction");
+      const offre = data.offre;
+      setTitre(offre.titre ?? "");
+      setEntreprise(offre.entreprise ?? "");
+      setLocalisation(offre.localisation ?? "");
+      if (offre.type_contrat) setTypeContrat(offre.type_contrat);
+      setDescription(offre.description ?? "");
+    } catch (err) {
+      setErreur(err instanceof Error ? err.message : "Erreur lors de l'extraction");
+    } finally {
+      setExtraction(false);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +77,26 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
     <div className="modal-overlay show" onClick={onFermer}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <h2>Ajouter une offre</h2>
+        <div className="field">
+          <label htmlFor="texte-colle">
+            Coller le texte de l&apos;annonce (optionnel — remplit les champs ci-dessous automatiquement)
+          </label>
+          <textarea
+            id="texte-colle"
+            placeholder="Copie-colle ici le titre, l'entreprise et la description depuis LinkedIn, Welcome to the Jungle, Indeed..."
+            value={texteColle}
+            onChange={(e) => setTexteColle(e.target.value)}
+          />
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{ marginTop: 8 }}
+            onClick={extraireAutomatiquement}
+            disabled={extraction || !texteColle.trim()}
+          >
+            {extraction ? "Extraction..." : "Extraire automatiquement"}
+          </button>
+        </div>
         <form onSubmit={handleSubmit}>
           <div className="field">
             <label htmlFor="titre">Intitulé du poste</label>
