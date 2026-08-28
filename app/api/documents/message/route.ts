@@ -50,20 +50,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const { texte, avertissements } = await genererMessageMotivation(profil, offre);
+  try {
+    const { texte, avertissements } = await genererMessageMotivation(profil, offre);
 
-  const { data: candidature, error: candidatureError } = await supabase
-    .from("candidatures")
-    .upsert(
-      { user_id: user.id, offre_id: offre.id, message_motivation: texte },
-      { onConflict: "offre_id" },
-    )
-    .select()
-    .single();
+    const { data: candidature, error: candidatureError } = await supabase
+      .from("candidatures")
+      .upsert(
+        { user_id: user.id, offre_id: offre.id, message_motivation: texte },
+        { onConflict: "offre_id" },
+      )
+      .select()
+      .single();
 
-  if (candidatureError) {
-    return NextResponse.json({ error: candidatureError.message }, { status: 500 });
+    if (candidatureError) {
+      return NextResponse.json({ error: candidatureError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ candidature, message: texte, avertissements });
+  } catch (error) {
+    console.error("Erreur génération message:", error);
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : "Erreur inconnue lors de la génération du message",
+      },
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json({ candidature, message: texte, avertissements });
 }

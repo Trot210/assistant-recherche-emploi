@@ -51,41 +51,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const { texte: lettre, avertissements } = await genererLettreMotivation(profil, offre);
-  const buffer = await buildLettrePdf(lettre, profil.contact);
+  try {
+    const { texte: lettre, avertissements } = await genererLettreMotivation(profil, offre);
+    const buffer = await buildLettrePdf(lettre, profil.contact);
 
-  const path = `${user.id}/${offre.id}/lettre.pdf`;
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
+    const path = `${user.id}/${offre.id}/lettre.pdf`;
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(path, buffer, { contentType: "application/pdf", upsert: true });
 
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
 
-  const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-    .from("documents")
-    .createSignedUrl(path, UN_AN_EN_SECONDES);
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(path, UN_AN_EN_SECONDES);
 
-  if (signedUrlError || !signedUrlData) {
+    if (signedUrlError || !signedUrlData) {
+      return NextResponse.json(
+        { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
+        { status: 500 },
+      );
+    }
+
+    const { data: candidature, error: candidatureError } = await supabase
+      .from("candidatures")
+      .upsert(
+        { user_id: user.id, offre_id: offre.id, lm_generee_url: signedUrlData.signedUrl },
+        { onConflict: "offre_id" },
+      )
+      .select()
+      .single();
+
+    if (candidatureError) {
+      return NextResponse.json({ error: candidatureError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ candidature, lettre, avertissements });
+  } catch (error) {
+    console.error("Erreur génération lettre:", error);
     return NextResponse.json(
-      { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
+      {
+        error:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : "Erreur inconnue lors de la génération de la lettre",
+      },
       { status: 500 },
     );
   }
-
-  const { data: candidature, error: candidatureError } = await supabase
-    .from("candidatures")
-    .upsert(
-      { user_id: user.id, offre_id: offre.id, lm_generee_url: signedUrlData.signedUrl },
-      { onConflict: "offre_id" },
-    )
-    .select()
-    .single();
-
-  if (candidatureError) {
-    return NextResponse.json({ error: candidatureError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ candidature, lettre, avertissements });
 }

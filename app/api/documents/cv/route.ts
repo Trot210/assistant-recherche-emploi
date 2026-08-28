@@ -48,41 +48,54 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const { contenu, avertissements } = await genererContenuCV(profil, offre);
-  const buffer = await buildCvPdf(contenu, profil.contact, profil.formation, profil.activites);
+  try {
+    const { contenu, avertissements } = await genererContenuCV(profil, offre);
+    const buffer = await buildCvPdf(contenu, profil.contact, profil.formation, profil.activites);
 
-  const path = `${user.id}/${offre.id}/cv.pdf`;
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
+    const path = `${user.id}/${offre.id}/cv.pdf`;
+    const { error: uploadError } = await supabase.storage
+      .from("documents")
+      .upload(path, buffer, { contentType: "application/pdf", upsert: true });
 
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
+    if (uploadError) {
+      return NextResponse.json({ error: uploadError.message }, { status: 500 });
+    }
 
-  const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-    .from("documents")
-    .createSignedUrl(path, UN_AN_EN_SECONDES);
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+      .from("documents")
+      .createSignedUrl(path, UN_AN_EN_SECONDES);
 
-  if (signedUrlError || !signedUrlData) {
+    if (signedUrlError || !signedUrlData) {
+      return NextResponse.json(
+        { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
+        { status: 500 },
+      );
+    }
+
+    const { data: candidature, error: candidatureError } = await supabase
+      .from("candidatures")
+      .upsert(
+        { user_id: user.id, offre_id: offre.id, cv_genere_url: signedUrlData.signedUrl },
+        { onConflict: "offre_id" },
+      )
+      .select()
+      .single();
+
+    if (candidatureError) {
+      return NextResponse.json({ error: candidatureError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ candidature, contenu, avertissements });
+  } catch (error) {
+    console.error("Erreur génération CV:", error);
     return NextResponse.json(
-      { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
+      {
+        error:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : "Erreur inconnue lors de la génération du CV",
+      },
       { status: 500 },
     );
   }
-
-  const { data: candidature, error: candidatureError } = await supabase
-    .from("candidatures")
-    .upsert(
-      { user_id: user.id, offre_id: offre.id, cv_genere_url: signedUrlData.signedUrl },
-      { onConflict: "offre_id" },
-    )
-    .select()
-    .single();
-
-  if (candidatureError) {
-    return NextResponse.json({ error: candidatureError.message }, { status: 500 });
-  }
-
-  return NextResponse.json({ candidature, contenu, avertissements });
 }
