@@ -1,21 +1,48 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { searchOffres } from "@/lib/france-travail/client";
 import type { OffreInsert } from "@/types/offre";
 
 // Départements Île-de-France : Paris intra-muros + petite/grande couronne.
 const DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"];
 
-export async function POST(request: Request) {
-  const supabase = await createClient();
+// Résout l'appelant : soit une session utilisateur classique (navigateur),
+// soit un job planifié externe (GitHub Actions) authentifié par secret —
+// ce dernier écrit via le client service_role pour l'utilisateur désigné
+// par SYNC_USER_ID, faute de session interactive.
+async function resolveAppelant(request: Request) {
+  const cronSecret = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("authorization");
 
+  if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
+    const syncUserId = process.env.SYNC_USER_ID;
+    if (!syncUserId) {
+      return { error: "SYNC_USER_ID non configuré côté serveur" } as const;
+    }
+    return { supabase: createAdminClient(), userId: syncUserId } as const;
+  }
+
+  const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
   if (!user) {
-    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+    return { error: "Non authentifié" } as const;
   }
+
+  return { supabase, userId: user.id } as const;
+}
+
+export async function POST(request: Request) {
+  const appelant = await resolveAppelant(request);
+
+  if ("error" in appelant) {
+    return NextResponse.json({ error: appelant.error }, { status: 401 });
+  }
+
+  const { supabase, userId } = appelant;
 
   const body = await request.json().catch(() => ({}));
   const motsCles: string | undefined = body.motsCles;
@@ -37,7 +64,7 @@ export async function POST(request: Request) {
 
       for (const offre of resultats) {
         offres.push({
-          user_id: user.id,
+          user_id: userId,
           titre: offre.intitule,
           entreprise: offre.entreprise?.nom ?? null,
           description: offre.description ?? null,

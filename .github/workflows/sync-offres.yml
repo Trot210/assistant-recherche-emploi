@@ -1,0 +1,20 @@
+name: Synchronisation des offres
+
+on:
+  schedule:
+    # Toutes les 20 minutes. GitHub peut retarder l'exécution en cas de
+    # forte charge sur le plan gratuit — pas de garantie de précision.
+    - cron: "*/20 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher /api/offres/sync
+        run: |
+          curl -sS -X POST "${{ secrets.SYNC_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --fail-with-body
