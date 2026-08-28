@@ -12,11 +12,11 @@ const DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"];
 // ce dernier écrit via le client service_role pour l'utilisateur désigné
 // par SYNC_USER_ID, faute de session interactive.
 async function resolveAppelant(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  const authHeader = request.headers.get("authorization");
+  const cronSecret = process.env.CRON_SECRET?.trim();
+  const authHeader = request.headers.get("authorization")?.trim();
 
   if (cronSecret && authHeader === `Bearer ${cronSecret}`) {
-    const syncUserId = process.env.SYNC_USER_ID;
+    const syncUserId = process.env.SYNC_USER_ID?.trim();
     if (!syncUserId) {
       return { error: "SYNC_USER_ID non configuré côté serveur" } as const;
     }
