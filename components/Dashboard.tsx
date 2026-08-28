@@ -24,6 +24,7 @@ interface Props {
 type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
 type Tri = "score-desc" | "score-asc" | "date-desc";
 type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
+type FiltreNotation = "Toutes" | "Notees" | "NonNotees";
 
 export default function Dashboard({ offres, userEmail }: Props) {
   const router = useRouter();
@@ -34,6 +35,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
   const [contrat, setContrat] = useState<CategorieContrat | "Toutes">("Toutes");
   const [tri, setTri] = useState<Tri>("score-desc");
   const [localisationFiltre, setLocalisationFiltre] = useState<FiltreLocalisation>("Toutes");
+  const [notationFiltre, setNotationFiltre] = useState<FiltreNotation>("Toutes");
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
@@ -65,7 +67,10 @@ export default function Dashboard({ offres, userEmail }: Props) {
         (localisationFiltre === "Paris"
           ? estParisIntraMuros(o.localisation)
           : !estParisIntraMuros(o.localisation));
-      return matchRecherche && matchSource && matchContrat && matchLocalisation;
+      const matchNotation =
+        notationFiltre === "Toutes" ||
+        (notationFiltre === "NonNotees" ? !o.score : Boolean(o.score));
+      return matchRecherche && matchSource && matchContrat && matchLocalisation && matchNotation;
     });
     liste = [...liste].sort((a, b) => {
       if (tri === "score-desc") return (b.score?.score ?? -1) - (a.score?.score ?? -1);
@@ -73,7 +78,12 @@ export default function Dashboard({ offres, userEmail }: Props) {
       return (b.date_publication ?? "").localeCompare(a.date_publication ?? "");
     });
     return liste;
-  }, [offres, recherche, source, contrat, tri, localisationFiltre]);
+  }, [offres, recherche, source, contrat, tri, localisationFiltre, notationFiltre]);
+
+  const nonNoteesCount = useMemo(
+    () => offresPertinentes.filter((o) => !o.score).length,
+    [offresPertinentes],
+  );
 
   const stats = useMemo(() => {
     const total = offresPertinentes.length;
@@ -324,6 +334,23 @@ export default function Dashboard({ offres, userEmail }: Props) {
               onClick={() => setContrat(c)}
             >
               {c}
+            </div>
+          ))}
+        </div>
+        <div className="chip-row">
+          {(
+            [
+              { valeur: "Toutes", libelle: "Notation : toutes" },
+              { valeur: "NonNotees", libelle: `Non notées (${nonNoteesCount})` },
+              { valeur: "Notees", libelle: "Notées" },
+            ] as const
+          ).map(({ valeur, libelle }) => (
+            <div
+              key={valeur}
+              className={`chip ${notationFiltre === valeur ? "active" : ""}`}
+              onClick={() => setNotationFiltre(valeur)}
+            >
+              {libelle}
             </div>
           ))}
         </div>
