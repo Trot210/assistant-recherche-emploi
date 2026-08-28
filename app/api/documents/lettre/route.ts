@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { genererLettreMotivation } from "@/lib/anthropic/documents";
-import { buildLettreDocx } from "@/lib/documents/docx";
+import { buildLettrePdf } from "@/lib/documents/pdf";
 
-const DOCX_CONTENT_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const UN_AN_EN_SECONDES = 60 * 60 * 24 * 365;
 
 export async function POST(request: Request) {
@@ -51,12 +49,12 @@ export async function POST(request: Request) {
   }
 
   const lettre = await genererLettreMotivation(profil, offre);
-  const buffer = await buildLettreDocx(lettre);
+  const buffer = await buildLettrePdf(lettre, profil.contact);
 
-  const path = `${user.id}/${offre.id}/lettre.docx`;
+  const path = `${user.id}/${offre.id}/lettre.pdf`;
   const { error: uploadError } = await supabase.storage
     .from("documents")
-    .upload(path, buffer, { contentType: DOCX_CONTENT_TYPE, upsert: true });
+    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
 
   if (uploadError) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });

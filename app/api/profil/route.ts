@@ -51,6 +51,9 @@ export async function PUT(request: Request) {
         competences: body.competences ?? [],
         experiences: body.experiences ?? [],
         preferences: body.preferences ?? { localisations: [], types_contrat: [] },
+        contact: body.contact ?? {},
+        formation: body.formation ?? [],
+        activites: body.activites ?? {},
       },
       { onConflict: "user_id" },
     )

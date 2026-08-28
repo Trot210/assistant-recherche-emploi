@@ -4,18 +4,45 @@
 export type OffreSource = "france_travail" | "apec";
 export type CandidatureStatut = "a_traiter" | "envoyee" | "entretien" | "refusee";
 
+export interface SousSection {
+  titre: string;
+  points: string[];
+}
+
 export interface Experience {
   poste: string;
   entreprise: string;
+  lieu?: string;
   date_debut: string;
   date_fin: string | null;
-  description: string;
+  sous_sections: SousSection[];
 }
 
 export interface Preferences {
   localisations: string[];
   types_contrat: string[];
   [key: string]: unknown;
+}
+
+export interface Contact {
+  nom?: string;
+  localisation?: string;
+  telephone?: string;
+  email?: string;
+  langues?: string[];
+  outils?: string[];
+  autre?: string[];
+}
+
+export interface FormationEntry {
+  periode: string;
+  intitule: string;
+  etablissement?: string;
+}
+
+export interface Activites {
+  loisirs?: string;
+  sport?: string;
 }
 
 export interface Database {
@@ -29,6 +56,9 @@ export interface Database {
           competences: string[];
           experiences: Experience[];
           preferences: Preferences;
+          contact: Contact;
+          formation: FormationEntry[];
+          activites: Activites;
           created_at: string;
           updated_at: string;
         };
@@ -39,6 +69,9 @@ export interface Database {
           competences?: string[];
           experiences?: Experience[];
           preferences?: Preferences;
+          contact?: Contact;
+          formation?: FormationEntry[];
+          activites?: Activites;
           created_at?: string;
           updated_at?: string;
         };

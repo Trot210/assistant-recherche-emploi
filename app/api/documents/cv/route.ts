@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { genererContenuCV } from "@/lib/anthropic/documents";
-import { buildCvDocx } from "@/lib/documents/docx";
+import { buildCvPdf } from "@/lib/documents/pdf";
 
-const DOCX_CONTENT_TYPE =
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const UN_AN_EN_SECONDES = 60 * 60 * 24 * 365;
 
 export async function POST(request: Request) {
@@ -48,12 +46,12 @@ export async function POST(request: Request) {
   }
 
   const contenu = await genererContenuCV(profil, offre);
-  const buffer = await buildCvDocx(contenu);
+  const buffer = await buildCvPdf(contenu, profil.contact, profil.formation, profil.activites);
 
-  const path = `${user.id}/${offre.id}/cv.docx`;
+  const path = `${user.id}/${offre.id}/cv.pdf`;
   const { error: uploadError } = await supabase.storage
     .from("documents")
-    .upload(path, buffer, { contentType: DOCX_CONTENT_TYPE, upsert: true });
+    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
 
   if (uploadError) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });

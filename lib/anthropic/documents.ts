@@ -7,7 +7,7 @@ import type { Offre } from "@/types/offre";
 const CVContentSchema = z.object({
   accroche: z
     .string()
-    .describe("Phrase d'accroche en tête de CV, positionnant le candidat par rapport à cette offre précise"),
+    .describe("Paragraphe de profil en tête de CV, positionnant le candidat par rapport à cette offre précise"),
   competences_mises_en_avant: z
     .array(z.string())
     .describe("Compétences du profil sélectionnées et reformulées pour matcher cette offre, dans l'ordre de pertinence"),
@@ -15,13 +15,18 @@ const CVContentSchema = z.object({
     z.object({
       poste: z.string(),
       entreprise: z.string(),
+      lieu: z.string().optional(),
       periode: z.string(),
-      points_cles: z
-        .array(z.string())
-        .describe("Réalisations/missions reformulées pour mettre en avant ce qui est pertinent pour cette offre"),
+      sous_sections: z.array(
+        z.object({
+          titre: z.string(),
+          points: z
+            .array(z.string())
+            .describe("Réalisations reformulées/sélectionnées pour mettre en avant ce qui est pertinent pour cette offre"),
+        }),
+      ),
     }),
   ),
-  formation: z.array(z.string()),
 });
 
 export type CVContent = z.infer<typeof CVContentSchema>;
@@ -29,8 +34,10 @@ export type CVContent = z.infer<typeof CVContentSchema>;
 function contexte(profil: Profil, offre: Offre): string {
   return `Profil du candidat :
 Compétences : ${profil.competences.length > 0 ? profil.competences.join(", ") : "non renseignées"}
-Expériences : ${profil.experiences.length > 0 ? JSON.stringify(profil.experiences) : "non renseignées"}
-CV : ${profil.cv_texte ?? "non renseigné"}
+Expériences (données réelles, structurées par sous-thèmes) : ${
+    profil.experiences.length > 0 ? JSON.stringify(profil.experiences) : "non renseignées"
+  }
+CV (texte libre complémentaire) : ${profil.cv_texte ?? "non renseigné"}
 
 Offre d'emploi :
 Titre : ${offre.titre}
@@ -44,7 +51,7 @@ export async function genererContenuCV(profil: Profil, offre: Offre): Promise<CV
     model: "claude-opus-5",
     max_tokens: 4096,
     system:
-      "Tu adaptes le CV d'un candidat pour une offre d'emploi précise. Réorganise et reformule les informations RÉELLES du profil pour mettre en avant ce qui est pertinent pour cette offre — n'invente aucune expérience, compétence ou diplôme qui ne figure pas dans le profil fourni.",
+      "Tu adaptes le CV d'un candidat pour une offre d'emploi précise. Pour chaque expérience, garde le même poste/entreprise/période, mais sélectionne et reformule UNIQUEMENT parmi les points réels fournis (dans sous_sections) ceux qui sont pertinents pour cette offre — tu peux reformuler pour clarifier ou mettre en avant, mais n'invente aucun fait, chiffre ou réalisation absent du profil fourni. Tu peux regrouper ou renommer les titres de sous-sections si cela clarifie la lecture pour cette offre, mais uniquement à partir du contenu réel fourni.",
     messages: [{ role: "user", content: contexte(profil, offre) }],
     output_config: {
       format: zodOutputFormat(CVContentSchema),
@@ -63,7 +70,7 @@ export async function genererLettreMotivation(profil: Profil, offre: Offre): Pro
     model: "claude-opus-5",
     max_tokens: 4096,
     system:
-      "Tu rédiges une lettre de motivation en français, professionnelle et personnalisée, à partir du profil réel d'un candidat et d'une offre d'emploi précise. Pas de formules toutes faites génériques, pas d'invention d'expérience ou de compétence absente du profil. Réponds uniquement avec le texte de la lettre, sans commentaire ni balisage.",
+      "Tu rédiges une lettre de motivation en français, professionnelle et personnalisée, à partir du profil réel d'un candidat et d'une offre d'emploi précise. Adopte le même registre factuel et structuré que le CV du candidat (orienté résultats, précis, pas de formules toutes faites génériques), pour que lettre et CV se lisent comme un ensemble cohérent. Pas d'invention d'expérience, de chiffre ou de compétence absente du profil. Réponds uniquement avec le texte de la lettre, sans commentaire ni balisage, sans en-tête ni formule d'adresse (le nom et les coordonnées du candidat sont ajoutés séparément).",
     messages: [{ role: "user", content: contexte(profil, offre) }],
   });
 
