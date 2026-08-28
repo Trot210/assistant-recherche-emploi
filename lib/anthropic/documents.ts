@@ -7,10 +7,10 @@ import type { Offre } from "@/types/offre";
 // Bornes strictes pour garantir un CV tenant sur une seule page A4, quoi
 // que renvoie le modèle : appliquées à la fois dans le prompt et en dur
 // après coup (clampCvContent), en défense en profondeur.
-const MAX_ACCROCHE_CHARS = 420;
-const MAX_COMPETENCES = 8;
-const MAX_POINTS_PAR_EXPERIENCE = 3;
-const MAX_POINT_CHARS = 150;
+const MAX_ACCROCHE_CHARS = 480;
+const MAX_COMPETENCES = 10;
+const MAX_POINTS_PAR_EXPERIENCE = 5;
+const MAX_POINT_CHARS = 135;
 
 const CVContentSchema = z.object({
   accroche: z
@@ -102,7 +102,7 @@ export async function genererLettreMotivation(profil: Profil, offre: Offre): Pro
     model: "claude-opus-5",
     max_tokens: 4096,
     system:
-      "Tu rédiges une lettre de motivation en français, professionnelle et personnalisée, à partir du profil réel d'un candidat et d'une offre d'emploi précise. Adopte le même registre factuel et dense que le CV du candidat (orienté résultats, précis, pas de formules toutes faites génériques), pour que lettre et CV se lisent comme un ensemble cohérent. Contrainte impérative : la lettre doit tenir sur UNE SEULE page A4 — maximum 320 mots, 4 paragraphes courts. Pas d'invention d'expérience, de chiffre ou de compétence absente du profil. Réponds uniquement avec le texte de la lettre, sans commentaire ni balisage, sans en-tête ni formule d'adresse (le nom et les coordonnées du candidat sont ajoutés séparément).",
+      "Tu rédiges une lettre de motivation en français, professionnelle et personnalisée, à partir du profil réel d'un candidat et d'une offre d'emploi précise. Adopte le même registre factuel et dense que le CV du candidat (orienté résultats, précis, pas de formules toutes faites génériques), pour que lettre et CV se lisent comme un ensemble cohérent. Contrainte impérative : la lettre doit remplir une page A4 sans déborder sur une deuxième — vise 420-480 mots répartis sur 5 paragraphes développés (pas de phrases trop courtes ni de liste à puces). Pas d'invention d'expérience, de chiffre ou de compétence absente du profil. Réponds uniquement avec le texte de la lettre, sans commentaire ni balisage, sans en-tête ni formule d'adresse (le nom et les coordonnées du candidat sont ajoutés séparément).",
     messages: [{ role: "user", content: contexte(profil, offre) }],
   });
 

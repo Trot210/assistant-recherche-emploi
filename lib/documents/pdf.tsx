@@ -6,40 +6,40 @@ const NOIR = "#1a1a1a";
 const GRIS = "#4a4a4a";
 
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 34, paddingVertical: 30, fontSize: 9, fontFamily: "Helvetica", color: NOIR },
+  page: { paddingHorizontal: 38, paddingVertical: 34, fontSize: 9.5, fontFamily: "Helvetica", color: NOIR },
 
-  nom: { fontSize: 17, fontWeight: 700, letterSpacing: 0.5, marginBottom: 3, textAlign: "center" },
-  contactLine: { fontSize: 8.5, color: GRIS, textAlign: "center", marginBottom: 8 },
-  headerRule: { borderBottomWidth: 1, borderBottomColor: NOIR, marginBottom: 8 },
+  nom: { fontSize: 19, fontWeight: 700, letterSpacing: 0.5, marginBottom: 4, textAlign: "center" },
+  contactLine: { fontSize: 9, color: GRIS, textAlign: "center", marginBottom: 10 },
+  headerRule: { borderBottomWidth: 1, borderBottomColor: NOIR, marginBottom: 10 },
 
-  ligneCompacte: { fontSize: 8.3, marginBottom: 9, lineHeight: 1.3 },
+  ligneCompacte: { fontSize: 8.8, marginBottom: 10, lineHeight: 1.35 },
   ligneLabel: { fontWeight: 700 },
 
-  profilText: { fontSize: 9, marginBottom: 10, textAlign: "justify", lineHeight: 1.28 },
+  profilText: { fontSize: 9.5, marginBottom: 12, textAlign: "justify", lineHeight: 1.4 },
 
   sectionTitle: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: 700,
     letterSpacing: 0.5,
     textTransform: "uppercase",
-    marginTop: 2,
-    marginBottom: 5,
+    marginTop: 6,
+    marginBottom: 7,
     borderBottomWidth: 0.75,
     borderBottomColor: NOIR,
-    paddingBottom: 2,
+    paddingBottom: 3,
   },
 
-  expBlock: { marginBottom: 7 },
+  expBlock: { marginBottom: 10 },
   expHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
-  expEntreprise: { fontSize: 9.3, fontWeight: 700 },
-  expPeriode: { fontSize: 8.3, color: GRIS },
-  expPoste: { fontSize: 8.8, fontStyle: "italic", marginBottom: 2 },
-  point: { fontSize: 8.5, marginBottom: 1, lineHeight: 1.22, paddingLeft: 8 },
+  expEntreprise: { fontSize: 9.8, fontWeight: 700 },
+  expPeriode: { fontSize: 8.7, color: GRIS },
+  expPoste: { fontSize: 9.2, fontStyle: "italic", marginBottom: 3 },
+  point: { fontSize: 9, marginBottom: 1.8, lineHeight: 1.32, paddingLeft: 9 },
 
-  formationRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2.5 },
-  formationTitre: { fontSize: 8.7, fontWeight: 700 },
-  formationEtab: { fontSize: 8.5, color: GRIS },
-  formationDate: { fontSize: 8.3, color: GRIS },
+  formationRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
+  formationTitre: { fontSize: 9.2, fontWeight: 700 },
+  formationEtab: { fontSize: 8.8, color: GRIS },
+  formationDate: { fontSize: 8.7, color: GRIS },
 });
 
 export async function buildCvPdf(
@@ -159,7 +159,7 @@ export async function buildLettrePdf(lettre: string, contact: Contact): Promise<
         {paragraphes.map((p, i) => (
           <Text
             key={i}
-            style={{ fontSize: 9.3, marginBottom: 9, lineHeight: 1.35, textAlign: "justify" }}
+            style={{ fontSize: 10, marginBottom: 11, lineHeight: 1.45, textAlign: "justify" }}
           >
             {p.trim()}
           </Text>
