@@ -55,6 +55,12 @@ async function getAccessToken(): Promise<string> {
   return cachedToken.value;
 }
 
+const MAX_TENTATIVES_429 = 3;
+
+function attendre(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 export async function searchOffres(
   params: FranceTravailSearchParams,
 ): Promise<FranceTravailSearchResponse> {
@@ -65,16 +71,37 @@ export async function searchOffres(
     if (value !== undefined) query.set(key, String(value));
   }
 
-  const res = await fetch(`${SEARCH_URL}?${query.toString()}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  let res: Response;
+  let tentative = 0;
+
+  // L'API limite le débit (~3 req/s) : on synchronise beaucoup de requêtes
+  // successives (mots-clés × départements), donc un 429 occasionnel est
+  // normal — on retente avec un backoff plutôt que d'échouer tout de suite.
+  while (true) {
+    res = await fetch(`${SEARCH_URL}?${query.toString()}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    if (res.status !== 429 || tentative >= MAX_TENTATIVES_429) break;
+
+    const retryAfter = Number(res.headers.get("retry-after"));
+    const delai = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : 1500 * (tentative + 1);
+    await attendre(delai);
+    tentative += 1;
+  }
 
   // L'API renvoie 206 (Partial Content) quand la pagination "range" ne
-  // couvre pas tous les résultats disponibles : c'est un succès.
+  // couvre pas tous les résultats disponibles, et 204 (No Content, corps
+  // vide) quand la recherche ne trouve aucune offre : les deux sont des
+  // succès.
   if (!res.ok && res.status !== 206) {
     throw new Error(
       `Echec de la recherche France Travail (${res.status}): ${await res.text()}`,
     );
+  }
+
+  if (res.status === 204) {
+    return { resultats: [] };
   }
 
   return (await res.json()) as FranceTravailSearchResponse;
