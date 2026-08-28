@@ -1,10 +1,28 @@
-export type Bande = "high" | "mid" | "low" | "none";
+// Dégradé continu (au lieu de 3 paliers plats) pour que chaque score se
+// distingue visuellement des autres, même proches — utile quand beaucoup
+// d'offres se regroupent dans une même tranche (ex: la plupart entre
+// 10-30%, qui seraient sinon toutes identiques en "rouge").
+const POINTS_DEGRADE: [number, [number, number, number]][] = [
+  [0, [168, 65, 43]], // brick
+  [50, [184, 121, 30]], // amber
+  [100, [31, 111, 92]], // emerald
+];
 
-export function bande(score: number | null | undefined): Bande {
-  if (score == null) return "none";
-  if (score >= 80) return "high";
-  if (score >= 60) return "mid";
-  return "low";
+function melanger(a: number, b: number, t: number): number {
+  return Math.round(a + (b - a) * t);
+}
+
+export function couleurMatch(score: number | null | undefined): string {
+  if (score == null) return "#D9D3C2"; // var(--line), pas encore noté
+  const s = Math.max(0, Math.min(100, score));
+  const [debut, fin] = s <= 50 ? [POINTS_DEGRADE[0], POINTS_DEGRADE[1]] : [POINTS_DEGRADE[1], POINTS_DEGRADE[2]];
+  const t = s <= 50 ? s / 50 : (s - 50) / 50;
+  const [r1, g1, b1] = debut[1];
+  const [r2, g2, b2] = fin[1];
+  const r = melanger(r1, r2, t);
+  const g = melanger(g1, g2, t);
+  const b = melanger(b1, b2, t);
+  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
 }
 
 export function estAutomatique(source: string): boolean {

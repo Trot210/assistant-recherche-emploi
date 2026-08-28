@@ -202,18 +202,6 @@ select {
   bottom: 0;
   width: 4px;
 }
-.band.high {
-  background: var(--emerald);
-}
-.band.mid {
-  background: var(--amber);
-}
-.band.low {
-  background: var(--brick);
-}
-.band.none {
-  background: var(--line);
-}
 
 .tag {
   position: absolute;
@@ -223,18 +211,7 @@ select {
   font-weight: 800;
   padding: 6px 14px 6px 18px;
   clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
-}
-.tag.high {
-  background: var(--emerald);
-  color: var(--emerald-bg);
-}
-.tag.mid {
-  background: var(--amber);
-  color: var(--amber-bg);
-}
-.tag.low {
-  background: var(--brick);
-  color: var(--brick-bg);
+  color: var(--paper);
 }
 .tag.none {
   background: var(--line);
@@ -415,6 +392,7 @@ select {
   padding: 10px 20px 10px 24px;
   margin-bottom: 18px;
   clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
+  color: var(--paper);
 }
 .panel-tag b {
   font-size: 34px;
