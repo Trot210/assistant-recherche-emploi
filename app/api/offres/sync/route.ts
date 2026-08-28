@@ -30,6 +30,9 @@ export async function POST(request: Request) {
         motsCles,
         departement,
         range: "0-149",
+        // Les plus récentes en premier, pour repérer vite les offres qui
+        // viennent d'être publiées.
+        sort: 1,
       });
 
       for (const offre of resultats) {

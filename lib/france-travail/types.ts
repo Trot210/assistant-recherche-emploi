@@ -33,4 +33,7 @@ export interface FranceTravailSearchParams {
   typeContrat?: string;
   range?: string; // ex: "0-49"
   minCreationDate?: string; // ISO-8601
+  // 0 = pertinence, 1 = date de création décroissante (le plus récent en
+  // premier), 2 = distance croissante.
+  sort?: 0 | 1 | 2;
 }
