@@ -1,0 +1,82 @@
+"use client";
+
+import type { OffreAvecDetails } from "@/types/dashboard";
+import { bande, estAutomatique, libelleSource, formaterDate } from "@/lib/dashboard-utils";
+
+interface Props {
+  offre: OffreAvecDetails;
+  chargement: "cv" | "lm" | "score" | null;
+  onOuvrir: () => void;
+  onNoter: () => void;
+}
+
+export default function OfferCard({ offre, chargement, onOuvrir, onNoter }: Props) {
+  const b = bande(offre.score?.score);
+  const pointsForts = offre.score?.points_forts.slice(0, 2) ?? [];
+  const ecarts = offre.score?.ecarts.slice(0, 1) ?? [];
+  const documentsPrets = Boolean(offre.candidature?.cv_genere_url || offre.candidature?.lm_generee_url);
+  const envoyee = offre.candidature?.statut === "envoyee";
+
+  return (
+    <div
+      className="card"
+      tabIndex={0}
+      onClick={onOuvrir}
+      onKeyDown={(e) => e.key === "Enter" && onOuvrir()}
+    >
+      <div className={`band ${b}`} />
+      {offre.score ? (
+        <div className={`tag ${b}`}>
+          <b>{offre.score.score}%</b>
+          <i>MATCH</i>
+        </div>
+      ) : (
+        <div
+          className="tag none"
+          onClick={(e) => {
+            e.stopPropagation();
+            onNoter();
+          }}
+        >
+          <b>{chargement === "score" ? "…" : "?"}</b>
+          <i>NOTER</i>
+        </div>
+      )}
+      <div className="card-top">
+        <p className="role">{offre.titre}</p>
+        <p className="company">
+          {offre.entreprise ?? "Entreprise non précisée"} · {offre.localisation ?? "Localisation non précisée"}
+        </p>
+      </div>
+      <div className="source-row">
+        <span className="source">{libelleSource(offre.source)}</span>
+        <span className={`source-type ${estAutomatique(offre.source) ? "auto" : ""}`}>
+          {estAutomatique(offre.source) ? "Auto" : "Manuel"}
+        </span>
+        <span className="date">{formaterDate(offre.date_publication)}</span>
+      </div>
+      {(pointsForts.length > 0 || ecarts.length > 0) && (
+        <div className="skills">
+          {pointsForts.map((p, i) => (
+            <div key={`p${i}`} className="skill ok">
+              <em>✓</em>
+              {p.length > 40 ? `${p.slice(0, 40)}…` : p}
+            </div>
+          ))}
+          {ecarts.map((e, i) => (
+            <div key={`e${i}`} className="skill gap">
+              <em>−</em>
+              {e.length > 40 ? `${e.slice(0, 40)}…` : e}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="status-line">
+        <span className={`status-pill ${envoyee ? "sent" : documentsPrets ? "ready" : ""}`}>
+          {envoyee ? "Envoyée" : documentsPrets ? "Documents prêts" : "À traiter"}
+        </span>
+        <span className="open">Voir le détail →</span>
+      </div>
+    </div>
+  );
+}

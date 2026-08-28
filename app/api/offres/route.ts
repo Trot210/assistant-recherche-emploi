@@ -1,12 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { OffreSource } from "@/types/database.types";
 
-const SOURCES_VALIDES: OffreSource[] = ["france_travail", "apec"];
-
-// Ajout manuel d'une offre (ex: offre APEC trouvée à la main, faute d'API
-// publique de lecture chez l'APEC — voir lib/france-travail pour la source
-// automatisée).
+// Ajout manuel d'une offre trouvée sur une source sans API de lecture
+// (APEC, LinkedIn, Indeed, JobTeaser, Welcome to the Jungle...) — voir
+// lib/france-travail pour la source automatisée.
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -31,13 +28,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const source: OffreSource = body.source ?? "apec";
-  if (!SOURCES_VALIDES.includes(source)) {
-    return NextResponse.json(
-      { error: `source doit être l'une de: ${SOURCES_VALIDES.join(", ")}` },
-      { status: 400 },
-    );
-  }
+  const source = typeof body.source === "string" && body.source.trim() !== ""
+    ? body.source.trim()
+    : "Autre";
 
   const { data, error } = await supabase
     .from("offres")

@@ -1,7 +1,6 @@
 // Types générés manuellement à partir des migrations SQL (supabase/migrations).
 // A régénérer avec `supabase gen types typescript` une fois le projet Supabase lié.
 
-export type OffreSource = "france_travail" | "apec";
 export type CandidatureStatut = "a_traiter" | "envoyee" | "entretien" | "refusee";
 
 export interface SousSection {
@@ -85,7 +84,7 @@ export interface Database {
           titre: string;
           entreprise: string | null;
           description: string | null;
-          source: OffreSource;
+          source: string;
           source_id: string;
           lien_original: string;
           localisation: string | null;
@@ -98,7 +97,7 @@ export interface Database {
           titre: string;
           entreprise?: string | null;
           description?: string | null;
-          source: OffreSource;
+          source: string;
           source_id: string;
           lien_original: string;
           localisation?: string | null;
@@ -176,7 +175,6 @@ export interface Database {
     Views: { [_ in never]: never };
     Functions: { [_ in never]: never };
     Enums: {
-      offre_source: OffreSource;
       candidature_statut: CandidatureStatut;
     };
     CompositeTypes: { [_ in never]: never };

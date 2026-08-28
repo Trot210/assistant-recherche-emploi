@@ -34,12 +34,12 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const isAuthRoute = request.nextUrl.pathname.startsWith("/login");
-  const isPublicRoute = request.nextUrl.pathname === "/";
   const isApiRoute = request.nextUrl.pathname.startsWith("/api");
 
+  // Le dashboard vit sur "/" : toute page hors /login exige une session.
   // Les routes API gèrent elles-mêmes l'authentification et répondent en
   // JSON (401) plutôt que via une redirection HTML.
-  if (!user && !isAuthRoute && !isPublicRoute && !isApiRoute) {
+  if (!user && !isAuthRoute && !isApiRoute) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
