@@ -190,7 +190,9 @@ export async function genererMessageMotivation(
 ): Promise<{ texte: string; avertissements: string[] }> {
   const response = await anthropic.messages.create({
     model: "claude-opus-5",
-    max_tokens: 1024,
+    // Marge au-delà des ~1800 caractères visés : Claude Opus 5 réfléchit
+    // par défaut et ces tokens sont décomptés du même budget.
+    max_tokens: 2048,
     system: `Tu rédiges un message de motivation court en français, à partir du profil réel d'un candidat et d'une offre d'emploi précise. C'est une version condensée de sa candidature, destinée à être collée directement dans un formulaire de candidature en ligne ou envoyée à un recruteur.
 
 Règle absolue — aucune invention : le profil fourni est la source unique et officielle. N'invente jamais une expérience, un poste, une entreprise, un chiffre ou une compétence absente du profil.
@@ -231,7 +233,11 @@ async function verifierFidelite(
 ): Promise<string[]> {
   const response = await anthropic.messages.parse({
     model: "claude-opus-5",
-    max_tokens: 1024,
+    // Claude Opus 5 réfléchit par défaut (adaptive thinking) et ces tokens
+    // de réflexion sont décomptés du même budget que la réponse JSON — à
+    // 1024 la sortie structurée se faisait tronquer en plein milieu d'une
+    // chaîne (erreur "Unterminated string in JSON").
+    max_tokens: 4096,
     system:
       "Tu es un contrôleur qualité strict pour des candidatures d'emploi. On te donne le profil RÉEL d'un candidat et un texte généré pour sa candidature. Vérifie que CHAQUE affirmation factuelle du texte (expérience, poste, entreprise, compétence, outil, chiffre, diplôme, langue, niveau) est bien présente ou directement déductible du profil fourni — sans invention, exagération ni supposition. Signale toute affirmation non vérifiable, même mineure. Une reformulation ou synthèse fidèle n'est PAS un problème ; seule une information nouvelle en est un.",
     messages: [

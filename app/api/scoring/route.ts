@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { scoreCompatibilite } from "@/lib/anthropic/scoring";
 
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -42,26 +44,39 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const resultat = await scoreCompatibilite(profil, offre);
+  try {
+    const resultat = await scoreCompatibilite(profil, offre);
 
-  const { data: score, error: scoreError } = await supabase
-    .from("scores")
-    .upsert(
+    const { data: score, error: scoreError } = await supabase
+      .from("scores")
+      .upsert(
+        {
+          user_id: user.id,
+          offre_id: offre.id,
+          score: resultat.score,
+          points_forts: resultat.points_forts,
+          ecarts: resultat.ecarts,
+        },
+        { onConflict: "offre_id" },
+      )
+      .select()
+      .single();
+
+    if (scoreError) {
+      return NextResponse.json({ error: scoreError.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ score });
+  } catch (error) {
+    console.error("Erreur scoring:", error);
+    return NextResponse.json(
       {
-        user_id: user.id,
-        offre_id: offre.id,
-        score: resultat.score,
-        points_forts: resultat.points_forts,
-        ecarts: resultat.ecarts,
+        error:
+          error instanceof Error
+            ? `${error.name}: ${error.message}`
+            : "Erreur inconnue lors du scoring",
       },
-      { onConflict: "offre_id" },
-    )
-    .select()
-    .single();
-
-  if (scoreError) {
-    return NextResponse.json({ error: scoreError.message }, { status: 500 });
+      { status: 500 },
+    );
   }
-
-  return NextResponse.json({ score });
 }

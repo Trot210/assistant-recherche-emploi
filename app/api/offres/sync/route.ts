@@ -25,6 +25,8 @@ const MOTS_CLES_DEFAUT = [
   "marketing",
   "trade marketing",
   "commercial",
+  "key account manager",
+  "KAM",
 ];
 
 // Résout l'appelant : soit une session utilisateur classique (navigateur),
