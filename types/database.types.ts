@@ -154,6 +154,7 @@ export interface Database {
           statut: CandidatureStatut;
           cv_genere_url: string | null;
           lm_generee_url: string | null;
+          message_motivation: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -165,6 +166,7 @@ export interface Database {
           statut?: CandidatureStatut;
           cv_genere_url?: string | null;
           lm_generee_url?: string | null;
+          message_motivation?: string | null;
           created_at?: string;
           updated_at?: string;
         };

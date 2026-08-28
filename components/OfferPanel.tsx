@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { OffreAvecDetails } from "@/types/dashboard";
 import {
   bande,
@@ -12,10 +13,12 @@ import {
 
 interface Props {
   offre: OffreAvecDetails;
-  chargement: "cv" | "lm" | "score" | null;
+  chargement: "cv" | "lm" | "message" | "score" | null;
+  avertissements: string[];
   onFermer: () => void;
   onGenererCv: () => void;
   onGenererLettre: () => void;
+  onGenererMessage: () => void;
   onNoter: () => void;
   onMarquerEnvoyee: () => void;
 }
@@ -23,14 +26,24 @@ interface Props {
 export default function OfferPanel({
   offre,
   chargement,
+  avertissements,
   onFermer,
   onGenererCv,
   onGenererLettre,
+  onGenererMessage,
   onNoter,
   onMarquerEnvoyee,
 }: Props) {
   const b = bande(offre.score?.score);
   const envoyee = offre.candidature?.statut === "envoyee";
+  const [copie, setCopie] = useState(false);
+
+  async function copierMessage() {
+    if (!offre.candidature?.message_motivation) return;
+    await navigator.clipboard.writeText(offre.candidature.message_motivation);
+    setCopie(true);
+    setTimeout(() => setCopie(false), 2000);
+  }
 
   return (
     <>
@@ -101,6 +114,18 @@ export default function OfferPanel({
             </>
           )}
 
+          {avertissements.length > 0 && (
+            <div className="panel-section">
+              <h3>⚠ Contrôle qualité — à relire</h3>
+              {avertissements.map((a, i) => (
+                <div key={i} className="list-item gap">
+                  <span className="mark">!</span>
+                  {a}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="panel-section">
             <h3>Documents</h3>
             <div>
@@ -145,6 +170,19 @@ export default function OfferPanel({
             </div>
           </div>
 
+          {offre.candidature?.message_motivation && (
+            <div className="panel-section">
+              <h3>Message de motivation court</h3>
+              <p style={{ whiteSpace: "pre-wrap" }}>{offre.candidature.message_motivation}</p>
+              <p className="doc-meta" style={{ marginTop: 6 }}>
+                {offre.candidature.message_motivation.length} / 1800 caractères
+              </p>
+              <button className="btn btn-outline" style={{ marginTop: 8 }} onClick={copierMessage}>
+                {copie ? "Copié ✓" : "Copier le message"}
+              </button>
+            </div>
+          )}
+
           <div className="panel-section">
             <h3>Candidature</h3>
             <div className="actions">
@@ -153,6 +191,13 @@ export default function OfferPanel({
               </button>
               <button className="btn btn-outline" onClick={onGenererLettre} disabled={chargement === "lm"}>
                 {chargement === "lm" ? "Génération..." : "Générer une lettre de motivation"}
+              </button>
+              <button className="btn btn-outline" onClick={onGenererMessage} disabled={chargement === "message"}>
+                {chargement === "message"
+                  ? "Génération..."
+                  : offre.candidature?.message_motivation
+                    ? "Régénérer le message court"
+                    : "Générer un message de motivation court"}
               </button>
               <a className="btn-link" href={offre.lien_original} target="_blank" rel="noopener noreferrer">
                 Voir l&apos;annonce originale sur {libelleSource(offre.source)} ({domaine(offre.lien_original)}) ↗

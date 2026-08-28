@@ -21,7 +21,7 @@ interface Props {
   userEmail: string;
 }
 
-type ActionEnCours = { offreId: string; type: "cv" | "lm" | "score" } | null;
+type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
 type Tri = "score-desc" | "score-asc" | "date-desc";
 type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
 
@@ -39,6 +39,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
   const [syncEnCours, setSyncEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [avertissements, setAvertissements] = useState<string[]>([]);
 
   const sourcesDisponibles = useMemo(() => {
     const set = new Set(offres.map((o) => o.source));
@@ -105,9 +106,11 @@ export default function Dashboard({ offres, userEmail }: Props) {
 
   async function genererCv(offreId: string) {
     setErreur(null);
+    setAvertissements([]);
     setActionEnCours({ offreId, type: "cv" });
     try {
-      await appelerApi("/api/documents/cv", { offre_id: offreId });
+      const data = await appelerApi("/api/documents/cv", { offre_id: offreId });
+      setAvertissements(data.avertissements ?? []);
       rafraichir();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la génération du CV");
@@ -118,12 +121,29 @@ export default function Dashboard({ offres, userEmail }: Props) {
 
   async function genererLettre(offreId: string) {
     setErreur(null);
+    setAvertissements([]);
     setActionEnCours({ offreId, type: "lm" });
     try {
-      await appelerApi("/api/documents/lettre", { offre_id: offreId });
+      const data = await appelerApi("/api/documents/lettre", { offre_id: offreId });
+      setAvertissements(data.avertissements ?? []);
       rafraichir();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la génération de la lettre");
+    } finally {
+      setActionEnCours(null);
+    }
+  }
+
+  async function genererMessage(offreId: string) {
+    setErreur(null);
+    setAvertissements([]);
+    setActionEnCours({ offreId, type: "message" });
+    try {
+      const data = await appelerApi("/api/documents/message", { offre_id: offreId });
+      setAvertissements(data.avertissements ?? []);
+      rafraichir();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de la génération du message");
     } finally {
       setActionEnCours(null);
     }
@@ -286,7 +306,10 @@ export default function Dashboard({ offres, userEmail }: Props) {
               key={offre.id}
               offre={offre}
               chargement={actionEnCours?.offreId === offre.id ? actionEnCours.type : null}
-              onOuvrir={() => setOffreSelectionneeId(offre.id)}
+              onOuvrir={() => {
+                setOffreSelectionneeId(offre.id);
+                setAvertissements([]);
+              }}
               onNoter={() => noterOffre(offre.id)}
             />
           ))}
@@ -297,9 +320,14 @@ export default function Dashboard({ offres, userEmail }: Props) {
         <OfferPanel
           offre={offreSelectionnee}
           chargement={actionEnCours?.offreId === offreSelectionnee.id ? actionEnCours.type : null}
-          onFermer={() => setOffreSelectionneeId(null)}
+          avertissements={avertissements}
+          onFermer={() => {
+            setOffreSelectionneeId(null);
+            setAvertissements([]);
+          }}
           onGenererCv={() => genererCv(offreSelectionnee.id)}
           onGenererLettre={() => genererLettre(offreSelectionnee.id)}
+          onGenererMessage={() => genererMessage(offreSelectionnee.id)}
           onNoter={() => noterOffre(offreSelectionnee.id)}
           onMarquerEnvoyee={() => marquerStatut(offreSelectionnee.id, "envoyee")}
         />

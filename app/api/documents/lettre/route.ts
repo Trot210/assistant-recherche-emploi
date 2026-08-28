@@ -5,6 +5,9 @@ import { buildLettrePdf } from "@/lib/documents/pdf";
 
 const UN_AN_EN_SECONDES = 60 * 60 * 24 * 365;
 
+// Génération + contrôle qualité (2 appels Claude séquentiels).
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -48,7 +51,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const lettre = await genererLettreMotivation(profil, offre);
+  const { texte: lettre, avertissements } = await genererLettreMotivation(profil, offre);
   const buffer = await buildLettrePdf(lettre, profil.contact);
 
   const path = `${user.id}/${offre.id}/lettre.pdf`;
@@ -84,5 +87,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: candidatureError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ candidature, lettre });
+  return NextResponse.json({ candidature, lettre, avertissements });
 }

@@ -12,7 +12,7 @@ import {
 
 interface Props {
   offre: OffreAvecDetails;
-  chargement: "cv" | "lm" | "score" | null;
+  chargement: "cv" | "lm" | "message" | "score" | null;
   onOuvrir: () => void;
   onNoter: () => void;
 }

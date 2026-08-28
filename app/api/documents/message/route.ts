@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { genererContenuCV } from "@/lib/anthropic/documents";
-import { buildCvPdf } from "@/lib/documents/pdf";
-
-const UN_AN_EN_SECONDES = 60 * 60 * 24 * 365;
+import { genererMessageMotivation } from "@/lib/anthropic/documents";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
 
+// Message de motivation court (≤1800 caractères) : pas de PDF, texte brut
+// destiné à être copié-collé dans un formulaire de candidature en ligne.
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -40,7 +39,10 @@ export async function POST(request: Request) {
   }
   if (!profil) {
     return NextResponse.json(
-      { error: "Profil non renseigné — remplis-le via PUT /api/profil avant de générer un CV" },
+      {
+        error:
+          "Profil non renseigné — remplis-le via PUT /api/profil avant de générer un message",
+      },
       { status: 400 },
     );
   }
@@ -48,33 +50,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const { contenu, avertissements } = await genererContenuCV(profil, offre);
-  const buffer = await buildCvPdf(contenu, profil.contact, profil.formation, profil.activites);
-
-  const path = `${user.id}/${offre.id}/cv.pdf`;
-  const { error: uploadError } = await supabase.storage
-    .from("documents")
-    .upload(path, buffer, { contentType: "application/pdf", upsert: true });
-
-  if (uploadError) {
-    return NextResponse.json({ error: uploadError.message }, { status: 500 });
-  }
-
-  const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-    .from("documents")
-    .createSignedUrl(path, UN_AN_EN_SECONDES);
-
-  if (signedUrlError || !signedUrlData) {
-    return NextResponse.json(
-      { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
-      { status: 500 },
-    );
-  }
+  const { texte, avertissements } = await genererMessageMotivation(profil, offre);
 
   const { data: candidature, error: candidatureError } = await supabase
     .from("candidatures")
     .upsert(
-      { user_id: user.id, offre_id: offre.id, cv_genere_url: signedUrlData.signedUrl },
+      { user_id: user.id, offre_id: offre.id, message_motivation: texte },
       { onConflict: "offre_id" },
     )
     .select()
@@ -84,5 +65,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: candidatureError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ candidature, contenu, avertissements });
+  return NextResponse.json({ candidature, message: texte, avertissements });
 }
