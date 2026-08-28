@@ -2,37 +2,44 @@ import { Document, Page, Text, View, StyleSheet, renderToBuffer } from "@react-p
 import type { CVContent } from "@/lib/anthropic/documents";
 import type { Contact, FormationEntry, Activites } from "@/types/database.types";
 
-const BLEU = "#1F4E79";
+const NOIR = "#1a1a1a";
+const GRIS = "#4a4a4a";
 
 const styles = StyleSheet.create({
-  page: { padding: 40, fontSize: 10, fontFamily: "Helvetica", color: "#1a1a1a" },
-  nom: { fontSize: 22, color: BLEU, fontWeight: 700, marginBottom: 10 },
-  contactRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 14 },
-  contactCol: { flexDirection: "column", maxWidth: "48%" },
-  contactLine: { fontSize: 9, marginBottom: 3 },
-  bold: { fontWeight: 700 },
-  profilText: { fontSize: 10, marginBottom: 16, textAlign: "justify", lineHeight: 1.4 },
+  page: { paddingHorizontal: 34, paddingVertical: 30, fontSize: 9, fontFamily: "Helvetica", color: NOIR },
+
+  nom: { fontSize: 17, fontWeight: 700, letterSpacing: 0.5, marginBottom: 3, textAlign: "center" },
+  contactLine: { fontSize: 8.5, color: GRIS, textAlign: "center", marginBottom: 8 },
+  headerRule: { borderBottomWidth: 1, borderBottomColor: NOIR, marginBottom: 8 },
+
+  ligneCompacte: { fontSize: 8.3, marginBottom: 9, lineHeight: 1.3 },
+  ligneLabel: { fontWeight: 700 },
+
+  profilText: { fontSize: 9, marginBottom: 10, textAlign: "justify", lineHeight: 1.28 },
+
   sectionTitle: {
-    fontSize: 13,
-    color: BLEU,
+    fontSize: 10,
     fontWeight: 700,
-    marginTop: 10,
-    marginBottom: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: BLEU,
-    paddingBottom: 3,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginTop: 2,
+    marginBottom: 5,
+    borderBottomWidth: 0.75,
+    borderBottomColor: NOIR,
+    paddingBottom: 2,
   },
-  expBlock: { marginBottom: 12 },
-  expRow: { flexDirection: "row" },
-  expDate: { width: 95, fontSize: 9, textDecoration: "underline" },
-  expContent: { flex: 1 },
-  expTitre: { fontSize: 10.5, fontWeight: 700, marginBottom: 4 },
-  sousTitre: { fontSize: 9.5, textDecoration: "underline", marginTop: 5, marginBottom: 2 },
-  point: { fontSize: 9.5, marginBottom: 1.5, lineHeight: 1.35 },
-  formationRow: { flexDirection: "row", marginBottom: 5 },
-  formationDate: { width: 95, fontSize: 9, textDecoration: "underline" },
-  formationTitre: { fontSize: 9.5, fontWeight: 700 },
-  activiteLine: { fontSize: 9.5, marginBottom: 3 },
+
+  expBlock: { marginBottom: 7 },
+  expHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
+  expEntreprise: { fontSize: 9.3, fontWeight: 700 },
+  expPeriode: { fontSize: 8.3, color: GRIS },
+  expPoste: { fontSize: 8.8, fontStyle: "italic", marginBottom: 2 },
+  point: { fontSize: 8.5, marginBottom: 1, lineHeight: 1.22, paddingLeft: 8 },
+
+  formationRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 2.5 },
+  formationTitre: { fontSize: 8.7, fontWeight: 700 },
+  formationEtab: { fontSize: 8.5, color: GRIS },
+  formationDate: { fontSize: 8.3, color: GRIS },
 });
 
 export async function buildCvPdf(
@@ -41,63 +48,71 @@ export async function buildCvPdf(
   formation: FormationEntry[],
   activites: Activites,
 ): Promise<Buffer> {
+  const contactParts = [contact.localisation, contact.telephone, contact.email].filter(Boolean);
+  const activitesParts = [
+    activites.loisirs ? `Loisirs : ${activites.loisirs}` : null,
+    activites.sport ? `Sport : ${activites.sport}` : null,
+  ].filter(Boolean);
+
   const doc = (
     <Document>
       <Page size="A4" style={styles.page}>
-        {contact.nom && <Text style={styles.nom}>{contact.nom}</Text>}
+        {contact.nom && <Text style={styles.nom}>{contact.nom.toUpperCase()}</Text>}
+        {contactParts.length > 0 && (
+          <Text style={styles.contactLine}>{contactParts.join("   •   ")}</Text>
+        )}
+        <View style={styles.headerRule} />
 
-        <View style={styles.contactRow}>
-          <View style={styles.contactCol}>
-            {contact.localisation && <Text style={styles.contactLine}>{contact.localisation}</Text>}
-            {contact.telephone && <Text style={styles.contactLine}>{contact.telephone}</Text>}
-            {contact.email && <Text style={styles.contactLine}>{contact.email}</Text>}
-          </View>
-          <View style={styles.contactCol}>
+        {(contact.langues?.length || contact.outils?.length || contact.autre?.length) ? (
+          <Text style={styles.ligneCompacte}>
             {contact.langues && contact.langues.length > 0 && (
-              <Text style={styles.contactLine}>
-                <Text style={styles.bold}>Langues : </Text>
+              <>
+                <Text style={styles.ligneLabel}>Langues : </Text>
                 {contact.langues.join(", ")}
-              </Text>
+                {"   "}
+              </>
             )}
             {contact.outils && contact.outils.length > 0 && (
-              <Text style={styles.contactLine}>
-                <Text style={styles.bold}>Outils : </Text>
+              <>
+                <Text style={styles.ligneLabel}>Outils : </Text>
                 {contact.outils.join(", ")}
-              </Text>
+                {"   "}
+              </>
             )}
             {contact.autre && contact.autre.length > 0 && (
-              <Text style={styles.contactLine}>
-                <Text style={styles.bold}>Autre : </Text>
+              <>
+                <Text style={styles.ligneLabel}>Autre : </Text>
                 {contact.autre.join(", ")}
-              </Text>
+              </>
             )}
-          </View>
-        </View>
+          </Text>
+        ) : null}
 
         <Text style={styles.profilText}>{cv.accroche}</Text>
 
-        <Text style={styles.sectionTitle}>Expériences professionnelles</Text>
+        {cv.competences_mises_en_avant.length > 0 && (
+          <Text style={styles.ligneCompacte}>
+            <Text style={styles.ligneLabel}>Compétences clés : </Text>
+            {cv.competences_mises_en_avant.join(" • ")}
+          </Text>
+        )}
+
+        <Text style={styles.sectionTitle}>Expérience professionnelle</Text>
         {cv.experiences.map((exp, i) => (
           <View key={i} style={styles.expBlock} wrap={false}>
-            <View style={styles.expRow}>
-              <Text style={styles.expDate}>{exp.periode}</Text>
-              <View style={styles.expContent}>
-                <Text style={styles.expTitre}>
-                  {exp.entreprise}
-                  {exp.lieu ? `, ${exp.lieu}` : ""} — {exp.poste}
-                </Text>
-                {exp.sous_sections.map((ss, j) => (
-                  <View key={j}>
-                    <Text style={styles.sousTitre}>{ss.titre}</Text>
-                    {ss.points.map((p, k) => (
-                      <Text key={k} style={styles.point}>
-                        {p}
-                      </Text>
-                    ))}
-                  </View>
-                ))}
-              </View>
+            <View style={styles.expHeaderRow}>
+              <Text style={styles.expEntreprise}>
+                {exp.entreprise}
+                {exp.lieu ? `, ${exp.lieu}` : ""}
+              </Text>
+              <Text style={styles.expPeriode}>{exp.periode}</Text>
             </View>
+            <Text style={styles.expPoste}>{exp.poste}</Text>
+            {exp.points.map((p, k) => (
+              <Text key={k} style={styles.point}>
+                — {p}
+              </Text>
+            ))}
           </View>
         ))}
 
@@ -106,31 +121,20 @@ export async function buildCvPdf(
             <Text style={styles.sectionTitle}>Formation</Text>
             {formation.map((f, i) => (
               <View key={i} style={styles.formationRow}>
-                <Text style={styles.formationDate}>{f.periode}</Text>
                 <Text style={styles.formationTitre}>
                   {f.intitule}
-                  {f.etablissement ? `, ${f.etablissement}` : ""}
+                  {f.etablissement && <Text style={styles.formationEtab}>, {f.etablissement}</Text>}
                 </Text>
+                <Text style={styles.formationDate}>{f.periode}</Text>
               </View>
             ))}
           </>
         )}
 
-        {(activites.loisirs || activites.sport) && (
+        {activitesParts.length > 0 && (
           <>
-            <Text style={styles.sectionTitle}>Activités & Centres d&apos;intérêts</Text>
-            {activites.loisirs && (
-              <Text style={styles.activiteLine}>
-                <Text style={styles.bold}>Loisirs : </Text>
-                {activites.loisirs}
-              </Text>
-            )}
-            {activites.sport && (
-              <Text style={styles.activiteLine}>
-                <Text style={styles.bold}>Sport : </Text>
-                {activites.sport}
-              </Text>
-            )}
+            <Text style={styles.sectionTitle}>Activités &amp; centres d&apos;intérêts</Text>
+            <Text style={styles.ligneCompacte}>{activitesParts.join("   •   ")}</Text>
           </>
         )}
       </Page>
@@ -141,19 +145,22 @@ export async function buildCvPdf(
 }
 
 export async function buildLettrePdf(lettre: string, contact: Contact): Promise<Buffer> {
+  const contactParts = [contact.localisation, contact.telephone, contact.email].filter(Boolean);
   const paragraphes = lettre.split(/\n{2,}/).filter((p) => p.trim() !== "");
 
   const doc = (
     <Document>
       <Page size="A4" style={styles.page}>
-        {contact.nom && <Text style={{ fontSize: 13, fontWeight: 700, marginBottom: 6, color: BLEU }}>{contact.nom}</Text>}
-        <View style={{ marginBottom: 20 }}>
-          {contact.localisation && <Text style={styles.contactLine}>{contact.localisation}</Text>}
-          {contact.telephone && <Text style={styles.contactLine}>{contact.telephone}</Text>}
-          {contact.email && <Text style={styles.contactLine}>{contact.email}</Text>}
-        </View>
+        {contact.nom && <Text style={styles.nom}>{contact.nom.toUpperCase()}</Text>}
+        {contactParts.length > 0 && (
+          <Text style={styles.contactLine}>{contactParts.join("   •   ")}</Text>
+        )}
+        <View style={{ ...styles.headerRule, marginBottom: 16 }} />
         {paragraphes.map((p, i) => (
-          <Text key={i} style={{ fontSize: 10.5, marginBottom: 10, lineHeight: 1.5, textAlign: "justify" }}>
+          <Text
+            key={i}
+            style={{ fontSize: 9.3, marginBottom: 9, lineHeight: 1.35, textAlign: "justify" }}
+          >
             {p.trim()}
           </Text>
         ))}
