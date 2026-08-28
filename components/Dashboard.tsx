@@ -40,8 +40,6 @@ export default function Dashboard({ offres, userEmail }: Props) {
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
   const [syncEnCours, setSyncEnCours] = useState(false);
-  const [scoringMasseEnCours, setScoringMasseEnCours] = useState(false);
-  const [scoringMasseProgres, setScoringMasseProgres] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissements, setAvertissements] = useState<string[]>([]);
 
@@ -190,29 +188,6 @@ export default function Dashboard({ offres, userEmail }: Props) {
     }
   }
 
-  // Note par lots de 6 (contrainte de la route) jusqu'à 8 lots par clic
-  // (~48 offres, quelques minutes) — le job planifié GitHub Actions prend
-  // le relais pour rattraper le reste automatiquement en arrière-plan.
-  async function scorerToutesLesOffres() {
-    setErreur(null);
-    setScoringMasseEnCours(true);
-    let totalScore = 0;
-    try {
-      for (let i = 0; i < 8; i++) {
-        setScoringMasseProgres(`${totalScore} offre(s) notée(s)...`);
-        const data = await appelerApi("/api/scoring/batch", {});
-        totalScore += data.scored ?? 0;
-        rafraichir();
-        if (!data.restantes || data.restantes <= 0) break;
-      }
-    } catch (e) {
-      setErreur(e instanceof Error ? e.message : "Erreur lors du scoring en masse");
-    } finally {
-      setScoringMasseEnCours(false);
-      setScoringMasseProgres(null);
-    }
-  }
-
   async function synchroniser() {
     setErreur(null);
     setSyncEnCours(true);
@@ -244,9 +219,10 @@ export default function Dashboard({ offres, userEmail }: Props) {
           </p>
           <h1>Centre de pilotage</h1>
           <p className="sub">
-            Toutes tes offres, notées et classées par compatibilité avec ton profil. Sources : France
-            Travail, APEC, et ajouts manuels. Stages et alternances masqués par défaut — utilise le
-            filtre type de contrat pour les afficher.
+            Tes offres, classées par compatibilité avec ton profil. Sources : France Travail, APEC, et
+            ajouts manuels. Stages et alternances masqués par défaut — utilise le filtre type de contrat
+            pour les afficher. La notation se fait à la demande, offre par offre (filtre &quot;Non
+            notées&quot; pour repérer celles qui l&apos;attendent).
           </p>
         </div>
         <div className="top-actions">
@@ -255,13 +231,6 @@ export default function Dashboard({ offres, userEmail }: Props) {
           </button>
           <button className="action-btn primary" onClick={synchroniser} disabled={syncEnCours}>
             {syncEnCours ? "Synchronisation..." : "Synchroniser"}
-          </button>
-          <button
-            className="action-btn"
-            onClick={scorerToutesLesOffres}
-            disabled={scoringMasseEnCours}
-          >
-            {scoringMasseEnCours ? scoringMasseProgres ?? "Notation..." : "Noter les offres en attente"}
           </button>
           <button className="action-btn" onClick={deconnexion}>
             Déconnexion

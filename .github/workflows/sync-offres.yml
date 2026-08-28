@@ -19,20 +19,8 @@ jobs:
             -d '{}' \
             --fail-with-body
 
-      - name: Noter les offres en attente (par lots, jusqu'à rattraper le backlog)
-        run: |
-          SCORING_URL="${SYNC_URL%/api/offres/sync}/api/scoring/batch"
-          for i in $(seq 1 15); do
-            REPONSE=$(curl -sS -X POST "$SCORING_URL" \
-              -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
-              -H "Content-Type: application/json" \
-              -d '{}')
-            echo "Lot $i: $REPONSE"
-            RESTANTES=$(echo "$REPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin).get('restantes', 0))" 2>/dev/null || echo 0)
-            if [ "$RESTANTES" -le 0 ]; then
-              echo "Toutes les offres sont notées."
-              break
-            fi
-          done
-        env:
-          SYNC_URL: ${{ secrets.SYNC_URL }}
+      # Pas de notation automatique ici : chaque appel de scoring facture
+      # l'API Claude, et cette synchro tourne toutes les 20 min — noter en
+      # masse à ce rythme épuise vite le solde. Le scoring se fait
+      # uniquement à la demande (bouton "Noter cette offre" sur une offre
+      # précise), pour rester à coût nul en dehors d'un usage volontaire.
