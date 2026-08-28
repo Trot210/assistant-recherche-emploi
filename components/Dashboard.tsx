@@ -4,7 +4,13 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OffreAvecDetails } from "@/types/dashboard";
-import { estParisIntraMuros, libelleSource } from "@/lib/dashboard-utils";
+import {
+  estParisIntraMuros,
+  libelleSource,
+  categorieContrat,
+  estStageOuAlternance,
+  type CategorieContrat,
+} from "@/lib/dashboard-utils";
 import OfferCard from "./OfferCard";
 import OfferPanel from "./OfferPanel";
 import Tracker from "./Tracker";
@@ -25,6 +31,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
 
   const [recherche, setRecherche] = useState("");
   const [source, setSource] = useState("Toutes");
+  const [contrat, setContrat] = useState<CategorieContrat | "Toutes">("Toutes");
   const [tri, setTri] = useState<Tri>("score-desc");
   const [localisationFiltre, setLocalisationFiltre] = useState<FiltreLocalisation>("Toutes");
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
@@ -38,17 +45,24 @@ export default function Dashboard({ offres, userEmail }: Props) {
     return ["Toutes", ...Array.from(set)];
   }, [offres]);
 
+  // Stages et alternances sont exclus par défaut des résultats et des
+  // statistiques (système de recommandation) — sélectionner explicitement
+  // le filtre "Alternance" ou "Stage" les fait réapparaître.
+  const offresPertinentes = useMemo(() => offres.filter((o) => !estStageOuAlternance(o)), [offres]);
+
   const offresFiltrees = useMemo(() => {
     let liste = offres.filter((o) => {
       const texte = `${o.titre} ${o.entreprise ?? ""}`.toLowerCase();
       const matchRecherche = texte.includes(recherche.toLowerCase());
       const matchSource = source === "Toutes" || o.source === source;
+      const matchContrat =
+        contrat === "Toutes" ? !estStageOuAlternance(o) : categorieContrat(o) === contrat;
       const matchLocalisation =
         localisationFiltre === "Toutes" ||
         (localisationFiltre === "Paris"
           ? estParisIntraMuros(o.localisation)
           : !estParisIntraMuros(o.localisation));
-      return matchRecherche && matchSource && matchLocalisation;
+      return matchRecherche && matchSource && matchContrat && matchLocalisation;
     });
     liste = [...liste].sort((a, b) => {
       if (tri === "score-desc") return (b.score?.score ?? -1) - (a.score?.score ?? -1);
@@ -56,19 +70,21 @@ export default function Dashboard({ offres, userEmail }: Props) {
       return (b.date_publication ?? "").localeCompare(a.date_publication ?? "");
     });
     return liste;
-  }, [offres, recherche, source, tri, localisationFiltre]);
+  }, [offres, recherche, source, contrat, tri, localisationFiltre]);
 
   const stats = useMemo(() => {
-    const total = offres.length;
-    const fortes = offres.filter((o) => (o.score?.score ?? 0) >= 80).length;
-    const scores = offres.map((o) => o.score?.score).filter((s): s is number => s != null);
+    const total = offresPertinentes.length;
+    const fortes = offresPertinentes.filter((o) => (o.score?.score ?? 0) >= 80).length;
+    const scores = offresPertinentes
+      .map((o) => o.score?.score)
+      .filter((s): s is number => s != null);
     const moyenne =
       scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-    const documentsPrets = offres.filter(
+    const documentsPrets = offresPertinentes.filter(
       (o) => o.candidature?.cv_genere_url || o.candidature?.lm_generee_url,
     ).length;
     return { total, fortes, moyenne, documentsPrets };
-  }, [offres]);
+  }, [offresPertinentes]);
 
   const offreSelectionnee = offres.find((o) => o.id === offreSelectionneeId) ?? null;
 
@@ -174,7 +190,8 @@ export default function Dashboard({ offres, userEmail }: Props) {
           <h1>Centre de pilotage</h1>
           <p className="sub">
             Toutes tes offres, notées et classées par compatibilité avec ton profil. Sources : France
-            Travail, APEC, et ajouts manuels.
+            Travail, APEC, et ajouts manuels. Stages et alternances masqués par défaut — utilise le
+            filtre type de contrat pour les afficher.
           </p>
         </div>
         <div className="top-actions">
@@ -244,6 +261,17 @@ export default function Dashboard({ offres, userEmail }: Props) {
               onClick={() => setSource(s)}
             >
               {s === "Toutes" ? "Toutes" : libelleSource(s)}
+            </div>
+          ))}
+        </div>
+        <div className="chip-row">
+          {(["Toutes", "CDI", "CDD", "Alternance", "Stage", "Autre"] as const).map((c) => (
+            <div
+              key={c}
+              className={`chip ${contrat === c ? "active" : ""}`}
+              onClick={() => setContrat(c)}
+            >
+              {c}
             </div>
           ))}
         </div>

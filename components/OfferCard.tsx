@@ -1,7 +1,14 @@
 "use client";
 
 import type { OffreAvecDetails } from "@/types/dashboard";
-import { bande, estAutomatique, libelleSource, formaterDate } from "@/lib/dashboard-utils";
+import {
+  bande,
+  estAutomatique,
+  libelleSource,
+  formaterDate,
+  libelleTypeContrat,
+  estStageOuAlternance,
+} from "@/lib/dashboard-utils";
 
 interface Props {
   offre: OffreAvecDetails;
@@ -52,6 +59,9 @@ export default function OfferCard({ offre, chargement, onOuvrir, onNoter }: Prop
         <span className="source">{libelleSource(offre.source)}</span>
         <span className={`source-type ${estAutomatique(offre.source) ? "auto" : ""}`}>
           {estAutomatique(offre.source) ? "Auto" : "Manuel"}
+        </span>
+        <span className={`contrat ${estStageOuAlternance(offre) ? "stage-alternance" : ""}`}>
+          {libelleTypeContrat(offre)}
         </span>
         <span className="date">{formaterDate(offre.date_publication)}</span>
       </div>

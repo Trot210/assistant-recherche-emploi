@@ -89,6 +89,10 @@ export interface Database {
           lien_original: string;
           localisation: string | null;
           date_publication: string | null;
+          type_contrat: string | null;
+          type_contrat_libelle: string | null;
+          alternance: boolean;
+          stage: boolean;
           created_at: string;
         };
         Insert: {
@@ -102,6 +106,10 @@ export interface Database {
           lien_original: string;
           localisation?: string | null;
           date_publication?: string | null;
+          type_contrat?: string | null;
+          type_contrat_libelle?: string | null;
+          alternance?: boolean;
+          stage?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["offres"]["Insert"]>;

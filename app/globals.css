@@ -303,6 +303,20 @@ select {
   color: var(--emerald);
 }
 
+.contrat {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border: 1px solid var(--line-soft);
+  color: var(--ink-soft);
+  text-transform: uppercase;
+}
+.contrat.stage-alternance {
+  color: var(--brick);
+  border-color: var(--brick);
+}
+
 .skills {
   display: flex;
   flex-wrap: wrap;

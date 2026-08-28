@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { searchOffres } from "@/lib/france-travail/client";
+import { detecterStage, detecterAlternanceParTitre } from "@/lib/dashboard-utils";
 import type { OffreInsert } from "@/types/offre";
 
 // 8 départements × 6 mots-clés = 48 requêtes séquentielles vers l'API
@@ -95,6 +96,10 @@ export async function POST(request: Request) {
             date_publication: offre.dateCreation
               ? offre.dateCreation.slice(0, 10)
               : null,
+            type_contrat: offre.typeContrat ?? null,
+            type_contrat_libelle: offre.typeContratLibelle ?? null,
+            alternance: (offre.alternance ?? false) || detecterAlternanceParTitre(offre.intitule),
+            stage: detecterStage(offre.intitule),
           });
         }
       } catch (error) {

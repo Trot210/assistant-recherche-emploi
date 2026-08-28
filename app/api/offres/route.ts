@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { detecterStage } from "@/lib/dashboard-utils";
 
 // Ajout manuel d'une offre trouvée sur une source sans API de lecture
 // (APEC, LinkedIn, Indeed, JobTeaser, Welcome to the Jungle...) — voir
@@ -32,11 +33,25 @@ export async function POST(request: Request) {
     ? body.source.trim()
     : "Autre";
 
+  const titre = body.titre.trim();
+  const typeContrat =
+    typeof body.type_contrat === "string" && body.type_contrat.trim() !== ""
+      ? body.type_contrat.trim()
+      : null;
+
+  // Pas de champ dédié pour un ajout manuel : on déduit alternance/stage du
+  // titre et du type de contrat renseignés, comme pour la sync automatique.
+  const texteADetecter = `${titre} ${typeContrat ?? ""}`;
+  const alternance = /\balternance\b|\bapprentissage\b|\bprofessionnalisation\b/i.test(
+    texteADetecter,
+  );
+  const stage = detecterStage(texteADetecter);
+
   const { data, error } = await supabase
     .from("offres")
     .insert({
       user_id: user.id,
-      titre: body.titre.trim(),
+      titre,
       entreprise: body.entreprise ?? null,
       description: body.description ?? null,
       source,
@@ -46,6 +61,10 @@ export async function POST(request: Request) {
       lien_original: body.lien_original.trim(),
       localisation: body.localisation ?? null,
       date_publication: body.date_publication ?? null,
+      type_contrat: typeContrat,
+      type_contrat_libelle: typeContrat,
+      alternance,
+      stage,
     })
     .select()
     .single();

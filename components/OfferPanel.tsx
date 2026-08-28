@@ -1,7 +1,14 @@
 "use client";
 
 import type { OffreAvecDetails } from "@/types/dashboard";
-import { bande, estAutomatique, libelleSource, domaine } from "@/lib/dashboard-utils";
+import {
+  bande,
+  estAutomatique,
+  libelleSource,
+  domaine,
+  libelleTypeContrat,
+  estStageOuAlternance,
+} from "@/lib/dashboard-utils";
 
 interface Props {
   offre: OffreAvecDetails;
@@ -53,6 +60,9 @@ export default function OfferPanel({
             <span className="source">{libelleSource(offre.source)}</span>{" "}
             <span className={`source-type ${estAutomatique(offre.source) ? "auto" : ""}`}>
               {estAutomatique(offre.source) ? "Auto" : "Manuel"}
+            </span>{" "}
+            <span className={`contrat ${estStageOuAlternance(offre) ? "stage-alternance" : ""}`}>
+              {libelleTypeContrat(offre)}
             </span>
           </p>
 

@@ -11,6 +11,7 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
   const [titre, setTitre] = useState("");
   const [entreprise, setEntreprise] = useState("");
   const [source, setSource] = useState("LinkedIn");
+  const [typeContrat, setTypeContrat] = useState("CDI");
   const [lienOriginal, setLienOriginal] = useState("");
   const [localisation, setLocalisation] = useState("");
   const [description, setDescription] = useState("");
@@ -29,6 +30,7 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
           titre,
           entreprise: entreprise || null,
           source,
+          type_contrat: typeContrat || null,
           lien_original: lienOriginal,
           localisation: localisation || null,
           description: description || null,
@@ -71,6 +73,24 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
               <option value="JobTeaser" />
               <option value="Welcome to the Jungle" />
               <option value="APEC" />
+            </datalist>
+          </div>
+          <div className="field">
+            <label htmlFor="type-contrat">Type de contrat</label>
+            <input
+              id="type-contrat"
+              list="type-contrat-suggestions"
+              value={typeContrat}
+              onChange={(e) => setTypeContrat(e.target.value)}
+            />
+            <datalist id="type-contrat-suggestions">
+              <option value="CDI" />
+              <option value="CDD" />
+              <option value="V.I.E" />
+              <option value="Intérim" />
+              <option value="Freelance" />
+              <option value="Alternance" />
+              <option value="Stage" />
             </datalist>
           </div>
           <div className="field">

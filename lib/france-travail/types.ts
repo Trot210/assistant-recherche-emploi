@@ -7,6 +7,10 @@ export interface FranceTravailOffre {
   description?: string;
   dateCreation?: string;
   typeContrat?: string;
+  typeContratLibelle?: string;
+  // Fiable pour l'alternance (champ dédié de l'API). Pas d'équivalent
+  // fiable pour les stages — voir la détection heuristique côté sync.
+  alternance?: boolean;
   entreprise?: {
     nom?: string;
   };
