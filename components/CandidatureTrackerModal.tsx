@@ -8,6 +8,7 @@ import {
   STATUTS_CANDIDATURE_ORDRE,
   type CandidatureStatut,
 } from "@/lib/dashboard-utils";
+import { telechargerCsv, versLigneCsv } from "@/lib/csv";
 
 interface Props {
   offres: OffreAvecDetails[];
@@ -39,6 +40,31 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
     setTimeout(() => setCopie(false), 2000);
   }
 
+  function exporterExcel() {
+    const entetes = versLigneCsv([
+      "Date d'envoi",
+      "Intitulé du poste",
+      "Entreprise",
+      "Localisation",
+      "Source",
+      "Statut",
+      "Lien de l'annonce",
+    ]);
+    const corps = lignes.map((o) =>
+      versLigneCsv([
+        o.candidature?.date_envoi ? new Date(o.candidature.date_envoi).toLocaleDateString("fr-FR") : "",
+        o.titre,
+        o.entreprise,
+        o.localisation,
+        libelleSource(o.source),
+        o.candidature ? libelleStatutCandidature(o.candidature.statut) : "",
+        o.lien_original,
+      ]),
+    );
+    const date = new Date().toISOString().slice(0, 10);
+    telechargerCsv(`candidatures-${date}.csv`, [entetes, ...corps]);
+  }
+
   return (
     <div className="modal-overlay show" onClick={onFermer}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
@@ -57,9 +83,14 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
           </p>
         ) : (
           <>
-            <button type="button" className="btn btn-outline" style={{ marginBottom: 16 }} onClick={copierRecapitulatif}>
-              {copie ? "Copié ✓" : "Copier le récapitulatif"}
-            </button>
+            <div className="tracker-export-actions">
+              <button type="button" className="btn btn-outline" onClick={copierRecapitulatif}>
+                {copie ? "Copié ✓" : "Copier le récapitulatif"}
+              </button>
+              <button type="button" className="btn btn-outline" onClick={exporterExcel}>
+                Exporter en Excel (.csv)
+              </button>
+            </div>
             <div className="candidature-list">
               {lignes.map((o) => (
                 <div key={o.id} className="candidature-row">

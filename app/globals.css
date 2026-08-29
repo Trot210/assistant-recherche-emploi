@@ -584,6 +584,12 @@ select {
   color: var(--ink-soft);
   padding: 20px 0;
 }
+.tracker-export-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
 .candidature-list {
   display: flex;
   flex-direction: column;
