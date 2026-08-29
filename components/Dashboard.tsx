@@ -25,6 +25,7 @@ type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" 
 type Tri = "score-desc" | "score-asc" | "date-desc";
 type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
 type FiltreNotation = "Toutes" | "Notees" | "NonNotees";
+type FiltreStatut = "Toutes" | "Envoyees";
 
 export default function Dashboard({ offres, userEmail }: Props) {
   const router = useRouter();
@@ -36,6 +37,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
   const [tri, setTri] = useState<Tri>("score-desc");
   const [localisationFiltre, setLocalisationFiltre] = useState<FiltreLocalisation>("Toutes");
   const [notationFiltre, setNotationFiltre] = useState<FiltreNotation>("Toutes");
+  const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
@@ -71,7 +73,15 @@ export default function Dashboard({ offres, userEmail }: Props) {
       const matchNotation =
         notationFiltre === "Toutes" ||
         (notationFiltre === "NonNotees" ? !o.score : Boolean(o.score));
-      return matchRecherche && matchSource && matchContrat && matchLocalisation && matchNotation;
+      // Une offre marquée "envoyée" est retirée du dashboard principal par
+      // défaut (elle vit désormais dans le suivi des candidatures) — le
+      // filtre "Envoyées" permet de la retrouver explicitement, comme pour
+      // les stages/alternances.
+      const estEnvoyee = o.candidature?.statut === "envoyee";
+      const matchStatut = statutFiltre === "Envoyees" ? estEnvoyee : !estEnvoyee;
+      return (
+        matchRecherche && matchSource && matchContrat && matchLocalisation && matchNotation && matchStatut
+      );
     });
     liste = [...liste].sort((a, b) => {
       if (tri === "score-desc") return (b.score?.score ?? -1) - (a.score?.score ?? -1);
@@ -79,11 +89,16 @@ export default function Dashboard({ offres, userEmail }: Props) {
       return (b.date_publication ?? "").localeCompare(a.date_publication ?? "");
     });
     return liste;
-  }, [offres, recherche, source, contrat, tri, localisationFiltre, notationFiltre]);
+  }, [offres, recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
 
   const nonNoteesCount = useMemo(
     () => offresPertinentes.filter((o) => !o.score).length,
     [offresPertinentes],
+  );
+
+  const envoyeesCount = useMemo(
+    () => offres.filter((o) => o.candidature?.statut === "envoyee").length,
+    [offres],
   );
 
   const stats = useMemo(() => {
@@ -259,9 +274,9 @@ export default function Dashboard({ offres, userEmail }: Props) {
           <h1>Centre de pilotage</h1>
           <p className="sub">
             Tes offres, classées par compatibilité avec ton profil. Sources : France Travail, APEC, et
-            ajouts manuels. Stages et alternances masqués par défaut — utilise le filtre type de contrat
-            pour les afficher. La notation se fait à la demande, offre par offre (filtre &quot;Non
-            notées&quot; pour repérer celles qui l&apos;attendent).
+            ajouts manuels. Stages, alternances et offres déjà envoyées sont masqués par défaut — utilise
+            les filtres type de contrat / statut pour les afficher. La notation se fait à la demande,
+            offre par offre (filtre &quot;Non notées&quot; pour repérer celles qui l&apos;attendent).
           </p>
         </div>
         <div className="top-actions">
@@ -271,6 +286,9 @@ export default function Dashboard({ offres, userEmail }: Props) {
           <button className="action-btn primary" onClick={synchroniser} disabled={syncEnCours}>
             {syncEnCours ? "Synchronisation..." : "Synchroniser"}
           </button>
+          <a className="action-btn" href="#suivi-candidatures">
+            Suivi des candidatures
+          </a>
           <button className="action-btn" onClick={deconnexion}>
             Déconnexion
           </button>
@@ -360,6 +378,23 @@ export default function Dashboard({ offres, userEmail }: Props) {
               type="button"
               className={`chip ${notationFiltre === valeur ? "active" : ""}`}
               onClick={() => setNotationFiltre(valeur)}
+            >
+              {libelle}
+            </button>
+          ))}
+        </div>
+        <div className="chip-row">
+          {(
+            [
+              { valeur: "Toutes", libelle: "Statut : à traiter" },
+              { valeur: "Envoyees", libelle: `Envoyées (${envoyeesCount})` },
+            ] as const
+          ).map(({ valeur, libelle }) => (
+            <button
+              key={valeur}
+              type="button"
+              className={`chip ${statutFiltre === valeur ? "active" : ""}`}
+              onClick={() => setStatutFiltre(valeur)}
             >
               {libelle}
             </button>

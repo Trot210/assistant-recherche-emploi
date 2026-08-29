@@ -26,7 +26,7 @@ export default function Tracker({ offres, onRetirer }: Props) {
   }
 
   return (
-    <div className="tracker">
+    <div className="tracker" id="suivi-candidatures">
       <div className="tracker-head">
         <div>
           <h2>Suivi des candidatures</h2>
