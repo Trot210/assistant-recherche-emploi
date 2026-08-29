@@ -68,12 +68,13 @@ h1 {
   margin: 0 0 8px;
   letter-spacing: -0.01em;
 }
-.sub {
-  font-size: 15px;
-  color: var(--ink-soft);
-  max-width: 620px;
-  margin: 0 0 28px;
-  line-height: 1.5;
+.brand-title {
+  font-family: var(--font-fraunces), serif;
+  font-weight: 900;
+  font-size: 48px;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
 }
 
 /* stat strip */
@@ -231,6 +232,7 @@ select {
   top: 0;
   bottom: 0;
   width: 4px;
+  background: var(--line);
 }
 
 .tag {
@@ -241,7 +243,6 @@ select {
   font-weight: 800;
   padding: 6px 14px 6px 18px;
   clip-path: polygon(10px 0, 100% 0, 100% 100%, 10px 100%, 0 50%);
-  color: var(--paper);
 }
 .tag.none {
   background: var(--line);
@@ -422,7 +423,6 @@ select {
   padding: 10px 20px 10px 24px;
   margin-bottom: 18px;
   clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 50%);
-  color: var(--paper);
 }
 .panel-tag b {
   font-size: 34px;
@@ -733,6 +733,9 @@ table.track-table tr:last-child td {
 @media (max-width: 640px) {
   h1 {
     font-size: 34px;
+  }
+  .brand-title {
+    font-size: 36px;
   }
   .panel {
     width: 100%;

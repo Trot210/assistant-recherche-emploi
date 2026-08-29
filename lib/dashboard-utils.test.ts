@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   categorieContrat,
   couleurFortesCorrespondances,
-  couleurMatch,
   couleurScoreMoyen,
   detecterAlternanceParTitre,
   detecterStage,
@@ -12,27 +11,38 @@ import {
   estStageOuAlternance,
   libelleSource,
   libelleTypeContrat,
+  paletteScore,
 } from "./dashboard-utils";
 
-describe("couleurMatch", () => {
-  it("renvoie une couleur neutre pour une offre non notée", () => {
-    expect(couleurMatch(null)).toBe("#D9D3C2");
-    expect(couleurMatch(undefined)).toBe("#D9D3C2");
+describe("paletteScore", () => {
+  it("excellent match (85-100) : vert soutenu", () => {
+    expect(paletteScore(85)).toEqual({ bg: "#DCEFD8", text: "#1F5C2E" });
+    expect(paletteScore(100)).toEqual({ bg: "#DCEFD8", text: "#1F5C2E" });
   });
 
-  it("succès (émeraude) à partir de 70", () => {
-    expect(couleurMatch(70)).toBe("#1f6f5c");
-    expect(couleurMatch(100)).toBe("#1f6f5c");
+  it("bon match (70-84) : vert-jaune", () => {
+    expect(paletteScore(70)).toEqual({ bg: "#E9F2C9", text: "#5A7A1E" });
+    expect(paletteScore(84)).toEqual({ bg: "#E9F2C9", text: "#5A7A1E" });
   });
 
-  it("avertissement (ambre) entre 50 et 69", () => {
-    expect(couleurMatch(50)).toBe("#b8791e");
-    expect(couleurMatch(69)).toBe("#b8791e");
+  it("match correct (50-69) : jaune-ambre", () => {
+    expect(paletteScore(50)).toEqual({ bg: "#FBEFD4", text: "#8A5A00" });
+    expect(paletteScore(69)).toEqual({ bg: "#FBEFD4", text: "#8A5A00" });
   });
 
-  it("neutre (gris) en dessous de 50", () => {
-    expect(couleurMatch(0)).toBe("#585f6b");
-    expect(couleurMatch(49)).toBe("#585f6b");
+  it("match faible (30-49) : orange", () => {
+    expect(paletteScore(30)).toEqual({ bg: "#FBE0CE", text: "#B5551A" });
+    expect(paletteScore(49)).toEqual({ bg: "#FBE0CE", text: "#B5551A" });
+  });
+
+  it("match très faible (0-29) : rouge", () => {
+    expect(paletteScore(0)).toEqual({ bg: "#F9DEDE", text: "#B02323" });
+    expect(paletteScore(29)).toEqual({ bg: "#F9DEDE", text: "#B02323" });
+  });
+
+  it("ne sort jamais des bornes même hors plage", () => {
+    expect(paletteScore(-10)).toEqual(paletteScore(0));
+    expect(paletteScore(150)).toEqual(paletteScore(100));
   });
 });
 

@@ -1,13 +1,24 @@
-// Trois paliers : succès / avertissement / neutre. Un score bas n'est pas
-// une "erreur" à signaler en rouge sur chaque carte — le gris neutre évite
-// la fatigue visuelle sur un grand volume d'offres, à la différence des
-// stats agrégées (voir couleurScoreMoyen/couleurFortesCorrespondances) où
-// une vraie alerte a du sens.
-export function couleurMatch(score: number | null | undefined): string {
-  if (score == null) return "#D9D3C2"; // var(--line), pas encore noté
-  if (score >= 70) return "#1f6f5c"; // var(--emerald), succès
-  if (score >= 50) return "#b8791e"; // var(--amber), avertissement
-  return "#585f6b"; // var(--ink-soft), neutre
+export interface PaletteScore {
+  bg: string;
+  text: string;
+}
+
+// Échelle à 5 paliers façon jauge (rouge = faible, vert = fort), pensée
+// comme une fonction pure réutilisable partout où un score doit être
+// affiché (carte, panneau de détail, futures vues) plutôt que des classes
+// CSS conditionnelles éparpillées dans chaque composant.
+const PALIERS_SCORE: { seuil: number; bg: string; text: string }[] = [
+  { seuil: 85, bg: "#DCEFD8", text: "#1F5C2E" }, // excellent match
+  { seuil: 70, bg: "#E9F2C9", text: "#5A7A1E" }, // bon match
+  { seuil: 50, bg: "#FBEFD4", text: "#8A5A00" }, // match correct
+  { seuil: 30, bg: "#FBE0CE", text: "#B5551A" }, // match faible
+  { seuil: 0, bg: "#F9DEDE", text: "#B02323" }, // match très faible
+];
+
+export function paletteScore(score: number): PaletteScore {
+  const s = Math.max(0, Math.min(100, score));
+  const palier = PALIERS_SCORE.find((p) => s >= p.seuil) ?? PALIERS_SCORE[PALIERS_SCORE.length - 1];
+  return { bg: palier.bg, text: palier.text };
 }
 
 // Pour les stats agrégées du haut de page : ici une valeur basse mérite une

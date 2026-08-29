@@ -270,13 +270,7 @@ export default function Dashboard({ offres }: Props) {
       <div className="top-row">
         <div>
           {isPending && <p className="eyebrow">Actualisation...</p>}
-          <h1>Centre de pilotage</h1>
-          <p className="sub">
-            Tes offres, classées par compatibilité avec ton profil. Sources : France Travail, APEC, et
-            ajouts manuels. Stages, alternances et offres déjà envoyées sont masqués par défaut — utilise
-            les filtres type de contrat / statut pour les afficher. La notation se fait à la demande,
-            offre par offre (filtre &quot;Non notées&quot; pour repérer celles qui l&apos;attendent).
-          </p>
+          <h1 className="brand-title">Le Rayon</h1>
         </div>
         <div className="top-actions">
           <button className="action-btn" onClick={() => setModalAjoutOuvert(true)}>

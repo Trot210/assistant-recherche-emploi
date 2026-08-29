@@ -2,7 +2,7 @@
 
 import type { OffreAvecDetails } from "@/types/dashboard";
 import {
-  couleurMatch,
+  paletteScore,
   estAutomatique,
   libelleSource,
   formaterDate,
@@ -18,7 +18,7 @@ interface Props {
 }
 
 export default function OfferCard({ offre, chargement, onOuvrir, onNoter }: Props) {
-  const couleur = couleurMatch(offre.score?.score);
+  const palette = offre.score ? paletteScore(offre.score.score) : null;
   const pointsForts = offre.score?.points_forts.slice(0, 2) ?? [];
   const ecarts = offre.score?.ecarts.slice(0, 1) ?? [];
   const documentsPrets = Boolean(offre.candidature?.cv_genere_url || offre.candidature?.lm_generee_url);
@@ -31,9 +31,9 @@ export default function OfferCard({ offre, chargement, onOuvrir, onNoter }: Prop
       onClick={onOuvrir}
       onKeyDown={(e) => e.key === "Enter" && onOuvrir()}
     >
-      <div className="band" style={{ background: couleur }} />
-      {offre.score ? (
-        <div className="tag" style={{ background: couleur }}>
+      <div className="band" style={{ background: palette?.text }} />
+      {offre.score && palette ? (
+        <div className="tag" style={{ background: palette.bg, color: palette.text }}>
           <b>{offre.score.score}%</b>
           <i>MATCH</i>
         </div>

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import type { OffreAvecDetails } from "@/types/dashboard";
 import {
-  couleurMatch,
+  paletteScore,
   estAutomatique,
   libelleSource,
   domaine,
@@ -36,7 +36,7 @@ export default function OfferPanel({
   onMarquerEnvoyee,
   onSupprimer,
 }: Props) {
-  const couleur = couleurMatch(offre.score?.score);
+  const palette = offre.score ? paletteScore(offre.score.score) : null;
   const envoyee = offre.candidature?.statut === "envoyee";
   const [copie, setCopie] = useState(false);
 
@@ -56,8 +56,8 @@ export default function OfferPanel({
             ✕
           </button>
 
-          {offre.score ? (
-            <div className="panel-tag" style={{ background: couleur }}>
+          {offre.score && palette ? (
+            <div className="panel-tag" style={{ background: palette.bg, color: palette.text }}>
               <b>{offre.score.score}%</b>
               <i>COMPATIBILITÉ</i>
             </div>
