@@ -144,6 +144,35 @@ export function estEnvoyeeOuPlus(statut: CandidatureStatut | null | undefined): 
   return statut != null && statut !== "a_traiter";
 }
 
+export type EntreePagination = number | "…";
+
+// Numéros de page à afficher dans la barre de pagination : toujours la
+// première et la dernière page, plus une fenêtre autour de la page
+// courante, avec des "…" pour les trous — évite d'afficher des dizaines de
+// numéros quand il y a beaucoup de pages.
+export function calculerPagesAffichees(
+  page: number,
+  nbPages: number,
+  fenetre = 1,
+): EntreePagination[] {
+  if (nbPages <= 1) return [1];
+
+  const pages = new Set<number>([1, nbPages]);
+  for (let p = page - fenetre; p <= page + fenetre; p++) {
+    if (p >= 1 && p <= nbPages) pages.add(p);
+  }
+
+  const triees = Array.from(pages).sort((a, b) => a - b);
+  const resultat: EntreePagination[] = [];
+  for (let i = 0; i < triees.length; i++) {
+    if (i > 0 && triees[i] - triees[i - 1] > 1) {
+      resultat.push("…");
+    }
+    resultat.push(triees[i]);
+  }
+  return resultat;
+}
+
 export function domaine(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

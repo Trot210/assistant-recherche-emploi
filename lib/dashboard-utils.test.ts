@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculerPagesAffichees,
   categorieContrat,
   couleurFortesCorrespondances,
   couleurScoreMoyen,
@@ -126,6 +127,34 @@ describe("categorieContrat / libelleTypeContrat / estStageOuAlternance", () => {
     expect(estStageOuAlternance({ ...base, stage: true })).toBe(true);
     expect(estStageOuAlternance({ ...base, alternance: true })).toBe(true);
     expect(estStageOuAlternance(base)).toBe(false);
+  });
+});
+
+describe("calculerPagesAffichees", () => {
+  it("affiche simplement 1 s'il n'y a qu'une page", () => {
+    expect(calculerPagesAffichees(1, 1)).toEqual([1]);
+  });
+
+  it("affiche toutes les pages si elles tiennent dans la fenêtre", () => {
+    expect(calculerPagesAffichees(2, 4)).toEqual([1, 2, 3, 4]);
+  });
+
+  it("insère des ellipses de part et d'autre quand il y a beaucoup de pages", () => {
+    expect(calculerPagesAffichees(10, 20)).toEqual([1, "…", 9, 10, 11, "…", 20]);
+  });
+
+  it("pas d'ellipse initiale quand la page courante est proche du début", () => {
+    expect(calculerPagesAffichees(2, 20)).toEqual([1, 2, 3, "…", 20]);
+  });
+
+  it("pas d'ellipse finale quand la page courante est proche de la fin", () => {
+    expect(calculerPagesAffichees(19, 20)).toEqual([1, "…", 18, 19, 20]);
+  });
+
+  it("première et dernière page toujours présentes", () => {
+    const pages = calculerPagesAffichees(10, 20);
+    expect(pages[0]).toBe(1);
+    expect(pages[pages.length - 1]).toBe(20);
   });
 });
 

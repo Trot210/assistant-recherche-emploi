@@ -638,6 +638,25 @@ select {
   font-size: 14px;
 }
 
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 28px;
+}
+.pagination-pages {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.pagination-ellipsis {
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  padding: 0 2px;
+}
+
 /* header row + logout/add/sync buttons */
 .top-row {
   display: flex;

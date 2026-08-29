@@ -12,6 +12,7 @@ import {
   estEnvoyeeOuPlus,
   couleurFortesCorrespondances,
   couleurScoreMoyen,
+  calculerPagesAffichees,
   type CategorieContrat,
   type CandidatureStatut,
 } from "@/lib/dashboard-utils";
@@ -30,6 +31,8 @@ type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
 type FiltreNotation = "Toutes" | "Notees" | "NonNotees";
 type FiltreStatut = "Toutes" | "Envoyees";
 
+const TAILLE_PAGE = 24;
+
 export default function Dashboard({ offres }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -41,6 +44,7 @@ export default function Dashboard({ offres }: Props) {
   const [localisationFiltre, setLocalisationFiltre] = useState<FiltreLocalisation>("Toutes");
   const [notationFiltre, setNotationFiltre] = useState<FiltreNotation>("Toutes");
   const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
+  const [page, setPage] = useState(1);
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [suiviOuvert, setSuiviOuvert] = useState(false);
@@ -94,6 +98,22 @@ export default function Dashboard({ offres }: Props) {
     });
     return liste;
   }, [offres, recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
+
+  // Retour en page 1 dès qu'un filtre ou la recherche change — sinon on
+  // peut se retrouver sur une page vide après avoir réduit les résultats.
+  useEffect(() => {
+    setPage(1);
+  }, [recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
+
+  const nbPages = Math.max(1, Math.ceil(offresFiltrees.length / TAILLE_PAGE));
+  // Se raccroche à la dernière page valide plutôt que d'afficher une page
+  // vide si le nombre de résultats a diminué (offre supprimée, etc.) sans
+  // que le filtre lui-même ait changé.
+  const pageActuelle = Math.min(page, nbPages);
+  const offresPage = offresFiltrees.slice(
+    (pageActuelle - 1) * TAILLE_PAGE,
+    pageActuelle * TAILLE_PAGE,
+  );
 
   const nonNoteesCount = useMemo(
     () => offresPertinentes.filter((o) => !o.score).length,
@@ -410,20 +430,61 @@ export default function Dashboard({ offres }: Props) {
       {offresFiltrees.length === 0 ? (
         <div className="empty">Aucune offre ne correspond à ces filtres.</div>
       ) : (
-        <div className="grid">
-          {offresFiltrees.map((offre) => (
-            <OfferCard
-              key={offre.id}
-              offre={offre}
-              chargement={actionEnCours?.offreId === offre.id ? actionEnCours.type : null}
-              onOuvrir={() => {
-                setOffreSelectionneeId(offre.id);
-                setAvertissements([]);
-              }}
-              onNoter={() => noterOffre(offre.id)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid">
+            {offresPage.map((offre) => (
+              <OfferCard
+                key={offre.id}
+                offre={offre}
+                chargement={actionEnCours?.offreId === offre.id ? actionEnCours.type : null}
+                onOuvrir={() => {
+                  setOffreSelectionneeId(offre.id);
+                  setAvertissements([]);
+                }}
+                onNoter={() => noterOffre(offre.id)}
+              />
+            ))}
+          </div>
+
+          {nbPages > 1 && (
+            <div className="pagination">
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={pageActuelle === 1}
+              >
+                ← Précédent
+              </button>
+              <div className="pagination-pages">
+                {calculerPagesAffichees(pageActuelle, nbPages).map((entree, i) =>
+                  entree === "…" ? (
+                    <span key={`ellipsis-${i}`} className="pagination-ellipsis">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={entree}
+                      type="button"
+                      className={`chip ${entree === pageActuelle ? "active" : ""}`}
+                      onClick={() => setPage(entree)}
+                    >
+                      {entree}
+                    </button>
+                  ),
+                )}
+              </div>
+              <button
+                type="button"
+                className="action-btn"
+                onClick={() => setPage((p) => Math.min(nbPages, p + 1))}
+                disabled={pageActuelle === nbPages}
+              >
+                Suivant →
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {offreSelectionnee && (
