@@ -9,13 +9,15 @@ import {
   libelleSource,
   categorieContrat,
   estStageOuAlternance,
+  estEnvoyeeOuPlus,
   couleurFortesCorrespondances,
   couleurScoreMoyen,
   type CategorieContrat,
+  type CandidatureStatut,
 } from "@/lib/dashboard-utils";
 import OfferCard from "./OfferCard";
 import OfferPanel from "./OfferPanel";
-import Tracker from "./Tracker";
+import CandidatureTrackerModal from "./CandidatureTrackerModal";
 import AddOfferModal from "./AddOfferModal";
 
 interface Props {
@@ -41,6 +43,7 @@ export default function Dashboard({ offres }: Props) {
   const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
+  const [suiviOuvert, setSuiviOuvert] = useState(false);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
   const [syncEnCours, setSyncEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -74,12 +77,12 @@ export default function Dashboard({ offres }: Props) {
       const matchNotation =
         notationFiltre === "Toutes" ||
         (notationFiltre === "NonNotees" ? !o.score : Boolean(o.score));
-      // Une offre marquée "envoyée" est retirée du dashboard principal par
-      // défaut (elle vit désormais dans le suivi des candidatures) — le
-      // filtre "Envoyées" permet de la retrouver explicitement, comme pour
-      // les stages/alternances.
-      const estEnvoyee = o.candidature?.statut === "envoyee";
-      const matchStatut = statutFiltre === "Envoyees" ? estEnvoyee : !estEnvoyee;
+      // Une offre déjà envoyée (ou plus avancée : réponse reçue, entretien,
+      // refus, offre) est retirée du dashboard principal par défaut — elle
+      // vit désormais dans le suivi des candidatures. Le filtre "Envoyées"
+      // permet de la retrouver explicitement, comme pour les stages/alternances.
+      const envoyeeOuPlus = estEnvoyeeOuPlus(o.candidature?.statut);
+      const matchStatut = statutFiltre === "Envoyees" ? envoyeeOuPlus : !envoyeeOuPlus;
       return (
         matchRecherche && matchSource && matchContrat && matchLocalisation && matchNotation && matchStatut
       );
@@ -98,7 +101,7 @@ export default function Dashboard({ offres }: Props) {
   );
 
   const envoyeesCount = useMemo(
-    () => offres.filter((o) => o.candidature?.statut === "envoyee").length,
+    () => offres.filter((o) => estEnvoyeeOuPlus(o.candidature?.statut)).length,
     [offres],
   );
 
@@ -213,7 +216,7 @@ export default function Dashboard({ offres }: Props) {
     }
   }
 
-  async function marquerStatut(offreId: string, statut: "envoyee" | "a_traiter") {
+  async function marquerStatut(offreId: string, statut: CandidatureStatut) {
     setErreur(null);
     try {
       const res = await fetch("/api/candidatures", {
@@ -263,7 +266,7 @@ export default function Dashboard({ offres }: Props) {
     router.refresh();
   }
 
-  const candidaturesEnvoyees = offres.filter((o) => o.candidature?.statut === "envoyee");
+  const candidaturesSuivies = offres.filter((o) => estEnvoyeeOuPlus(o.candidature?.statut));
 
   return (
     <div className="wrap">
@@ -279,9 +282,9 @@ export default function Dashboard({ offres }: Props) {
           <button className="action-btn primary" onClick={synchroniser} disabled={syncEnCours}>
             {syncEnCours ? "Synchronisation..." : "Synchroniser"}
           </button>
-          <a className="action-btn" href="#suivi-candidatures">
+          <button className="action-btn" onClick={() => setSuiviOuvert(true)}>
             Suivi des candidatures
-          </a>
+          </button>
           <button className="action-btn" onClick={deconnexion}>
             Déconnexion
           </button>
@@ -441,7 +444,13 @@ export default function Dashboard({ offres }: Props) {
         />
       )}
 
-      <Tracker offres={candidaturesEnvoyees} onRetirer={(offreId) => marquerStatut(offreId, "a_traiter")} />
+      {suiviOuvert && (
+        <CandidatureTrackerModal
+          offres={candidaturesSuivies}
+          onFermer={() => setSuiviOuvert(false)}
+          onChangerStatut={(offreId, statut) => marquerStatut(offreId, statut)}
+        />
+      )}
 
       {modalAjoutOuvert && (
         <AddOfferModal

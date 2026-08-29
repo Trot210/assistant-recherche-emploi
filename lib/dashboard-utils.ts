@@ -101,6 +101,49 @@ export function estStageOuAlternance(offre: OffreContrat): boolean {
   return offre.alternance || offre.stage;
 }
 
+export type CandidatureStatut =
+  | "a_traiter"
+  | "envoyee"
+  | "reponse_recue"
+  | "entretien"
+  | "refusee"
+  | "offre";
+
+// Ordre d'affichage du pipeline, du moins au plus avancé (hors "à traiter",
+// qui précède l'envoi et n'apparaît pas dans le suivi des candidatures).
+export const STATUTS_CANDIDATURE_ORDRE: CandidatureStatut[] = [
+  "a_traiter",
+  "envoyee",
+  "reponse_recue",
+  "entretien",
+  "refusee",
+  "offre",
+];
+
+export function libelleStatutCandidature(statut: CandidatureStatut): string {
+  switch (statut) {
+    case "a_traiter":
+      return "À traiter";
+    case "envoyee":
+      return "Envoyée";
+    case "reponse_recue":
+      return "Réponse reçue";
+    case "entretien":
+      return "Entretien";
+    case "refusee":
+      return "Refusée";
+    case "offre":
+      return "Offre reçue";
+  }
+}
+
+// Une candidature au statut "à traiter" n'a pas encore été envoyée — le
+// suivi des candidatures et le masquage par défaut sur le dashboard
+// principal ne concernent que ce qui a dépassé cette étape.
+export function estEnvoyeeOuPlus(statut: CandidatureStatut | null | undefined): boolean {
+  return statut != null && statut !== "a_traiter";
+}
+
 export function domaine(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

@@ -573,67 +573,48 @@ select {
   color: var(--ink-soft);
 }
 
-/* tracker */
-.tracker {
-  margin-top: 48px;
-  padding-top: 28px;
-  border-top: 2px solid var(--ink);
-}
-.tracker-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-.tracker h2 {
-  font-family: var(--font-condensed);
-  font-weight: 800;
-  font-size: 26px;
-  margin: 0;
-}
-.tracker p.tracker-sub {
+/* suivi des candidatures (modal) */
+.tracker-sub {
   font-size: 13px;
   color: var(--ink-soft);
-  margin: 4px 0 0;
-  max-width: 480px;
-}
-table.track-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-}
-table.track-table th {
-  text-align: left;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  padding: 8px 10px;
-  border-bottom: 1px solid var(--ink);
-}
-table.track-table td {
-  padding: 11px 10px;
-  border-bottom: 1px solid var(--line-soft);
-  vertical-align: top;
-}
-table.track-table tr:last-child td {
-  border-bottom: 1px solid var(--line);
+  margin: 4px 0 18px;
 }
 .track-empty {
   font-size: 13.5px;
   color: var(--ink-soft);
   padding: 20px 0;
 }
-.remove-app {
-  font-size: 11.5px;
-  color: var(--brick);
-  background: none;
-  border: none;
-  cursor: pointer;
-  text-decoration: underline;
+.candidature-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.candidature-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  background: var(--card);
+}
+.candidature-row-main {
+  min-width: 0;
+}
+.candidature-poste {
+  font-size: 13.5px;
+  font-weight: 600;
+  margin: 0 0 2px;
+}
+.candidature-meta {
+  font-size: 12px;
+  color: var(--ink-soft);
+  margin: 0;
+}
+.candidature-row select {
+  flex-shrink: 0;
+  font-size: 12px;
+  padding: 7px 9px;
 }
 .mark-sent-row {
   margin-top: 6px;

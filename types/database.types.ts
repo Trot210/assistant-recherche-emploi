@@ -1,7 +1,13 @@
 // Types générés manuellement à partir des migrations SQL (supabase/migrations).
 // A régénérer avec `supabase gen types typescript` une fois le projet Supabase lié.
 
-export type CandidatureStatut = "a_traiter" | "envoyee" | "entretien" | "refusee";
+export type CandidatureStatut =
+  | "a_traiter"
+  | "envoyee"
+  | "reponse_recue"
+  | "entretien"
+  | "refusee"
+  | "offre";
 
 export interface SousSection {
   titre: string;

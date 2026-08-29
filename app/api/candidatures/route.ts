@@ -5,8 +5,10 @@ import type { CandidatureStatut } from "@/types/database.types";
 const STATUTS_VALIDES: CandidatureStatut[] = [
   "a_traiter",
   "envoyee",
+  "reponse_recue",
   "entretien",
   "refusee",
+  "offre",
 ];
 
 // Met à jour le statut d'une candidature (ex: "marquer comme envoyée" /
@@ -52,8 +54,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
   }
 
-  const dateEnvoi =
-    statut === "envoyee" ? new Date().toISOString().slice(0, 10) : null;
+  // date_envoi doit survivre aux étapes suivantes (entretien, refus, offre)
+  // — seul un retour à "à traiter" doit l'effacer. On préserve donc la
+  // valeur existante plutôt que de la recalculer à chaque changement de
+  // statut (l'upsert précédent l'écrasait à null dès que statut !== "envoyee").
+  const { data: existante } = await supabase
+    .from("candidatures")
+    .select("date_envoi")
+    .eq("offre_id", offreId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  let dateEnvoi: string | null;
+  if (statut === "a_traiter") {
+    dateEnvoi = null;
+  } else if (existante?.date_envoi) {
+    dateEnvoi = existante.date_envoi;
+  } else {
+    dateEnvoi = new Date().toISOString().slice(0, 10);
+  }
 
   const { data: candidature, error } = await supabase
     .from("candidatures")
