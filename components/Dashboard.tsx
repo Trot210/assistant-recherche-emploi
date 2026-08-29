@@ -46,6 +46,7 @@ export default function Dashboard({ offres }: Props) {
   const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
   const [page, setPage] = useState(1);
   const gridRef = useRef<HTMLDivElement>(null);
+  const premierRenduPage = useRef(true);
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [suiviOuvert, setSuiviOuvert] = useState(false);
@@ -116,10 +117,22 @@ export default function Dashboard({ offres }: Props) {
     pageActuelle * TAILLE_PAGE,
   );
 
-  function changerPage(nouvellePage: number) {
-    setPage(nouvellePage);
+  // Scroll déclenché après coup (useEffect, pas dans le handler de clic) :
+  // le handler ne fait que changer `page`, et c'est seulement une fois que
+  // React a fini de réconcilier le DOM avec les nouvelles cartes que le
+  // scroll se déclenche. Lancer scrollIntoView AVANT ce commit — comme le
+  // faisait la première version, directement dans le handler — mesure la
+  // position de la grille sur l'ancien layout : la mise à jour du contenu
+  // qui suit immédiatement (surtout quand le nombre de lignes change d'une
+  // page à l'autre) peut interrompre ou fausser l'animation en cours, d'où
+  // le comportement "ça ne le fait pas à chaque fois".
+  useEffect(() => {
+    if (premierRenduPage.current) {
+      premierRenduPage.current = false;
+      return;
+    }
     gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
+  }, [pageActuelle]);
 
   const nonNoteesCount = useMemo(
     () => offresPertinentes.filter((o) => !o.score).length,
@@ -457,7 +470,7 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => changerPage(Math.max(1, pageActuelle - 1))}
+                onClick={() => setPage(Math.max(1, pageActuelle - 1))}
                 disabled={pageActuelle === 1}
               >
                 ← Précédent
@@ -473,7 +486,7 @@ export default function Dashboard({ offres }: Props) {
                       key={entree}
                       type="button"
                       className={`chip ${entree === pageActuelle ? "active" : ""}`}
-                      onClick={() => changerPage(entree)}
+                      onClick={() => setPage(entree)}
                     >
                       {entree}
                     </button>
@@ -483,7 +496,7 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => changerPage(Math.min(nbPages, pageActuelle + 1))}
+                onClick={() => setPage(Math.min(nbPages, pageActuelle + 1))}
                 disabled={pageActuelle === nbPages}
               >
                 Suivant →
