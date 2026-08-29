@@ -4,11 +4,12 @@ import type { Contact, FormationEntry, Activites } from "@/types/database.types"
 
 const NOIR = "#1a1a1a";
 const GRIS = "#4a4a4a";
+const NAVY = "#1f3a5f";
 
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 38, paddingVertical: 34, fontSize: 9.5, fontFamily: "Helvetica", color: NOIR },
 
-  nom: { fontSize: 19, fontWeight: 700, letterSpacing: 0.5, marginBottom: 4, textAlign: "center" },
+  nom: { fontSize: 19, fontWeight: 700, letterSpacing: 0.5, marginBottom: 4, textAlign: "center", color: NAVY },
   contactLine: { fontSize: 9, color: GRIS, textAlign: "center", marginBottom: 10 },
   headerRule: { borderBottomWidth: 1, borderBottomColor: NOIR, marginBottom: 10 },
 
@@ -21,20 +22,21 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: 700,
     letterSpacing: 0.5,
-    textTransform: "uppercase",
+    color: NAVY,
     marginTop: 6,
     marginBottom: 7,
     borderBottomWidth: 0.75,
-    borderBottomColor: NOIR,
+    borderBottomColor: NAVY,
     paddingBottom: 3,
   },
 
-  expBlock: { marginBottom: 10 },
-  expHeaderRow: { flexDirection: "row", justifyContent: "space-between" },
-  expEntreprise: { fontSize: 9.8, fontWeight: 700 },
-  expPeriode: { fontSize: 8.7, color: GRIS },
-  expPoste: { fontSize: 9.2, fontStyle: "italic", marginBottom: 3 },
-  point: { fontSize: 9, marginBottom: 1.8, lineHeight: 1.32, paddingLeft: 9 },
+  expBlock: { marginBottom: 9 },
+  expHeaderRow: { flexDirection: "row", marginBottom: 2 },
+  expPeriode: { fontSize: 8.3, color: GRIS, textDecoration: "underline", width: 78 },
+  expEntrepriseTitre: { fontSize: 9.6, fontWeight: 700, flex: 1 },
+  sousSectionBlock: { marginTop: 3 },
+  sousSectionTitre: { fontSize: 8.8, fontWeight: 700, textDecoration: "underline", marginBottom: 1.5 },
+  point: { fontSize: 8.8, marginBottom: 1.6, lineHeight: 1.3, paddingLeft: 4 },
 
   formationRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
   formationTitre: { fontSize: 9.2, fontWeight: 700 },
@@ -101,17 +103,21 @@ export async function buildCvPdf(
         {cv.experiences.map((exp, i) => (
           <View key={i} style={styles.expBlock} wrap={false}>
             <View style={styles.expHeaderRow}>
-              <Text style={styles.expEntreprise}>
-                {exp.entreprise}
-                {exp.lieu ? `, ${exp.lieu}` : ""}
-              </Text>
               <Text style={styles.expPeriode}>{exp.periode}</Text>
-            </View>
-            <Text style={styles.expPoste}>{exp.poste}</Text>
-            {exp.points.map((p, k) => (
-              <Text key={k} style={styles.point}>
-                — {p}
+              <Text style={styles.expEntrepriseTitre}>
+                {exp.entreprise}
+                {exp.lieu ? `, ${exp.lieu}` : ""} – {exp.poste}
               </Text>
+            </View>
+            {exp.sousSections.map((sousSection, j) => (
+              <View key={j} style={styles.sousSectionBlock}>
+                <Text style={styles.sousSectionTitre}>{sousSection.titre}</Text>
+                {sousSection.points.map((p, k) => (
+                  <Text key={k} style={styles.point}>
+                    {p}
+                  </Text>
+                ))}
+              </View>
             ))}
           </View>
         ))}
