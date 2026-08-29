@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { searchOffres } from "@/lib/france-travail/client";
+import { TOUS_MOTS_CLES, TAILLE_LOT_MOTS_CLES, selectionnerLotMotsCles } from "@/lib/france-travail/motsCles";
 import { detecterStage, detecterAlternanceParTitre } from "@/lib/dashboard-utils";
 import type { OffreInsert } from "@/types/offre";
 
-// 8 départements × 6 mots-clés = 48 requêtes séquentielles vers l'API
-// France Travail (limitée à ~3 req/s) : largement au-delà des 10s par
-// défaut sur Vercel.
+// Chaque appel reste dans un budget de requêtes proche de l'historique
+// (8 départements × ~8 mots-clés ≈ 64 requêtes séquentielles vers l'API
+// France Travail, limitée à ~3 req/s) : largement au-delà des 10s par
+// défaut sur Vercel, d'où ce maxDuration. Voir lib/france-travail/motsCles.ts.
 export const maxDuration = 60;
 
 // Départements Île-de-France : Paris intra-muros + petite/grande couronne.
@@ -50,22 +52,6 @@ async function purgerOffresPerimees(
   return count ?? 0;
 }
 
-// L'API France Travail ne supporte qu'un seul mot-clé/phrase par requête
-// (les virgules ne fonctionnent pas comme un "OU") : on boucle sur chaque
-// mot-clé pour chaque département. Utilisés par défaut par le job planifié
-// (GitHub Actions) et le bouton "Synchroniser" du dashboard, sauf si un
-// motsCles explicite est fourni dans le corps de la requête.
-const MOTS_CLES_DEFAUT = [
-  "category manager",
-  "acheteur",
-  "chef de produit",
-  "marketing",
-  "trade marketing",
-  "commercial",
-  "key account manager",
-  "KAM",
-];
-
 // Résout l'appelant : soit une session utilisateur classique (navigateur),
 // soit un job planifié externe (GitHub Actions) authentifié par secret —
 // ce dernier écrit via le client service_role pour l'utilisateur désigné
@@ -104,7 +90,10 @@ export async function POST(request: Request) {
   const { supabase, userId } = appelant;
 
   const body = await request.json().catch(() => ({}));
-  const motsClesListe: string[] = body.motsCles ? [body.motsCles] : MOTS_CLES_DEFAUT;
+  const VINGT_MINUTES_MS = 20 * 60 * 1000;
+  const motsClesListe: string[] = body.motsCles
+    ? [body.motsCles]
+    : selectionnerLotMotsCles(TOUS_MOTS_CLES, TAILLE_LOT_MOTS_CLES, Date.now(), VINGT_MINUTES_MS);
   const departements: string[] = body.departements ?? DEPARTEMENTS_IDF;
 
   const offresParId = new Map<string, OffreInsert>();
