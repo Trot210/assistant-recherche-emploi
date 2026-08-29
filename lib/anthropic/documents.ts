@@ -13,8 +13,22 @@ const MAX_POINTS_PAR_EXPERIENCE = 5;
 const MAX_POINT_CHARS = 135;
 const MAX_MESSAGE_CHARS = 1800;
 
-function tronquer(texte: string, max: number) {
-  return texte.length <= max ? texte : `${texte.slice(0, max).replace(/\s+\S*$/, "")}…`;
+// Coupe sur la dernière phrase complète si elle tombe raisonnablement près
+// de la limite (ex: "...KPI et NielsenIQ." plutôt que "...environnements
+// hétérogènes et…") ; sinon retombe sur une coupure au dernier mot entier,
+// avec ellipse.
+export function tronquer(texte: string, max: number) {
+  if (texte.length <= max) return texte;
+  const coupe = texte.slice(0, max);
+  const dernierePhrase = Math.max(
+    coupe.lastIndexOf(". "),
+    coupe.lastIndexOf("! "),
+    coupe.lastIndexOf("? "),
+  );
+  if (dernierePhrase > max * 0.6) {
+    return coupe.slice(0, dernierePhrase + 1);
+  }
+  return `${coupe.replace(/\s+\S*$/, "")}…`;
 }
 
 function formaterPeriode(dateDebut: string, dateFin: string | null): string {
