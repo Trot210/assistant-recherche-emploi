@@ -3,6 +3,12 @@
 @tailwind utilities;
 
 :root {
+  /* Le site n'a pas de thème sombre : indique-le au navigateur pour que la
+     zone de rebond (overscroll) sur Safari/macOS reste claire au lieu de
+     basculer sur un fond sombre par défaut du système quand l'OS est en
+     mode sombre — sinon ça produit une bande noire visible au-dessus (et
+     en dessous) du contenu pendant le scroll. */
+  color-scheme: light;
   --paper: #eeeae0;
   --card: #f8f6f0;
   --ink: #191d22;
@@ -101,9 +107,9 @@ h1 {
 /* controls */
 .controls {
   display: flex;
-  gap: 10px;
+  gap: 14px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 22px;
   padding-bottom: 22px;
   border-bottom: 1px solid var(--line);
@@ -130,10 +136,26 @@ select {
   background: var(--card);
   color: var(--ink);
 }
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.filter-group-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  opacity: 0.75;
+}
 .chip-row {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+}
+.chip-row + .chip-row {
+  margin-top: 2px;
 }
 .chip {
   appearance: none;
@@ -304,27 +326,27 @@ select {
 
 .skills {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-left: 8px;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 0 4px 8px;
 }
 .skill {
   font-size: 11.5px;
-  padding: 4px 9px;
-  border: 1px solid var(--line-soft);
+  color: var(--ink-soft);
   display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.skill.ok {
-  color: var(--emerald);
-}
-.skill.gap {
-  color: var(--brick);
+  align-items: flex-start;
+  gap: 6px;
 }
 .skill em {
   font-style: normal;
   font-weight: 700;
+  flex-shrink: 0;
+}
+.skill.ok em {
+  color: var(--emerald);
+}
+.skill.gap em {
+  color: var(--brick);
 }
 
 .status-line {

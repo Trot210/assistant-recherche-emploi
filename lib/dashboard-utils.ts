@@ -1,28 +1,27 @@
-// Dégradé continu (au lieu de 3 paliers plats) pour que chaque score se
-// distingue visuellement des autres, même proches — utile quand beaucoup
-// d'offres se regroupent dans une même tranche (ex: la plupart entre
-// 10-30%, qui seraient sinon toutes identiques en "rouge").
-const POINTS_DEGRADE: [number, [number, number, number]][] = [
-  [0, [168, 65, 43]], // brick
-  [50, [184, 121, 30]], // amber
-  [100, [31, 111, 92]], // emerald
-];
-
-function melanger(a: number, b: number, t: number): number {
-  return Math.round(a + (b - a) * t);
-}
-
+// Trois paliers : succès / avertissement / neutre. Un score bas n'est pas
+// une "erreur" à signaler en rouge sur chaque carte — le gris neutre évite
+// la fatigue visuelle sur un grand volume d'offres, à la différence des
+// stats agrégées (voir couleurScoreMoyen/couleurFortesCorrespondances) où
+// une vraie alerte a du sens.
 export function couleurMatch(score: number | null | undefined): string {
   if (score == null) return "#D9D3C2"; // var(--line), pas encore noté
-  const s = Math.max(0, Math.min(100, score));
-  const [debut, fin] = s <= 50 ? [POINTS_DEGRADE[0], POINTS_DEGRADE[1]] : [POINTS_DEGRADE[1], POINTS_DEGRADE[2]];
-  const t = s <= 50 ? s / 50 : (s - 50) / 50;
-  const [r1, g1, b1] = debut[1];
-  const [r2, g2, b2] = fin[1];
-  const r = melanger(r1, r2, t);
-  const g = melanger(g1, g2, t);
-  const b = melanger(b1, b2, t);
-  return `#${[r, g, b].map((v) => v.toString(16).padStart(2, "0")).join("")}`;
+  if (score >= 70) return "#1f6f5c"; // var(--emerald), succès
+  if (score >= 50) return "#b8791e"; // var(--amber), avertissement
+  return "#585f6b"; // var(--ink-soft), neutre
+}
+
+// Pour les stats agrégées du haut de page : ici une valeur basse mérite une
+// vraie alerte (rouge), contrairement au badge par offre ci-dessus.
+export function couleurScoreMoyen(moyenne: number): string {
+  if (moyenne >= 70) return "#1f6f5c";
+  if (moyenne >= 50) return "#b8791e";
+  return "#a8412b"; // var(--brick)
+}
+
+export function couleurFortesCorrespondances(nombre: number): string {
+  if (nombre >= 5) return "#1f6f5c";
+  if (nombre >= 1) return "#b8791e";
+  return "#a8412b";
 }
 
 export function estAutomatique(source: string): boolean {

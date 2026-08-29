@@ -42,5 +42,5 @@ export default async function Home() {
     candidature: candidaturesParOffre.get(offre.id) ?? null,
   }));
 
-  return <Dashboard offres={offresAvecDetails} userEmail={user.email ?? ""} />;
+  return <Dashboard offres={offresAvecDetails} />;
 }

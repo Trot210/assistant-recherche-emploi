@@ -9,6 +9,8 @@ import {
   libelleSource,
   categorieContrat,
   estStageOuAlternance,
+  couleurFortesCorrespondances,
+  couleurScoreMoyen,
   type CategorieContrat,
 } from "@/lib/dashboard-utils";
 import OfferCard from "./OfferCard";
@@ -18,7 +20,6 @@ import AddOfferModal from "./AddOfferModal";
 
 interface Props {
   offres: OffreAvecDetails[];
-  userEmail: string;
 }
 
 type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
@@ -27,7 +28,7 @@ type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
 type FiltreNotation = "Toutes" | "Notees" | "NonNotees";
 type FiltreStatut = "Toutes" | "Envoyees";
 
-export default function Dashboard({ offres, userEmail }: Props) {
+export default function Dashboard({ offres }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -103,7 +104,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
 
   const stats = useMemo(() => {
     const total = offresPertinentes.length;
-    const fortes = offresPertinentes.filter((o) => (o.score?.score ?? 0) >= 80).length;
+    const fortes = offresPertinentes.filter((o) => (o.score?.score ?? 0) >= 70).length;
     const scores = offresPertinentes
       .map((o) => o.score?.score)
       .filter((s): s is number => s != null);
@@ -268,9 +269,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
     <div className="wrap">
       <div className="top-row">
         <div>
-          <p className="eyebrow">
-            {userEmail} · Cycle de candidatures{isPending ? " · actualisation..." : ""}
-          </p>
+          {isPending && <p className="eyebrow">Actualisation...</p>}
           <h1>Centre de pilotage</h1>
           <p className="sub">
             Tes offres, classées par compatibilité avec ton profil. Sources : France Travail, APEC, et
@@ -307,11 +306,11 @@ export default function Dashboard({ offres, userEmail }: Props) {
           <span>Offres suivies</span>
         </div>
         <div className="stat">
-          <b style={{ color: "var(--emerald)" }}>{stats.fortes}</b>
+          <b style={{ color: couleurFortesCorrespondances(stats.fortes) }}>{stats.fortes}</b>
           <span>Fortes correspondances</span>
         </div>
         <div className="stat">
-          <b>{stats.moyenne}%</b>
+          <b style={{ color: couleurScoreMoyen(stats.moyenne) }}>{stats.moyenne}%</b>
           <span>Score moyen</span>
         </div>
         <div className="stat">
@@ -341,64 +340,73 @@ export default function Dashboard({ offres, userEmail }: Props) {
           <option value="Paris">Paris intra-muros</option>
           <option value="IDF">IDF hors Paris</option>
         </select>
-        <div className="chip-row">
-          {sourcesDisponibles.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className={`chip ${source === s ? "active" : ""}`}
-              onClick={() => setSource(s)}
-            >
-              {s === "Toutes" ? "Toutes" : libelleSource(s)}
-            </button>
-          ))}
+        <div className="filter-group">
+          <span className="filter-group-label">Source</span>
+          <div className="chip-row">
+            {sourcesDisponibles.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`chip ${source === s ? "active" : ""}`}
+                onClick={() => setSource(s)}
+              >
+                {s === "Toutes" ? "Toutes" : libelleSource(s)}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="chip-row">
-          {(["Toutes", "CDI", "CDD", "Alternance", "Stage", "Autre"] as const).map((c) => (
-            <button
-              key={c}
-              type="button"
-              className={`chip ${contrat === c ? "active" : ""}`}
-              onClick={() => setContrat(c)}
-            >
-              {c}
-            </button>
-          ))}
+        <div className="filter-group">
+          <span className="filter-group-label">Contrat</span>
+          <div className="chip-row">
+            {(["Toutes", "CDI", "CDD", "Alternance", "Stage", "Autre"] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                className={`chip ${contrat === c ? "active" : ""}`}
+                onClick={() => setContrat(c)}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="chip-row">
-          {(
-            [
-              { valeur: "Toutes", libelle: "Notation : toutes" },
-              { valeur: "NonNotees", libelle: `Non notées (${nonNoteesCount})` },
-              { valeur: "Notees", libelle: "Notées" },
-            ] as const
-          ).map(({ valeur, libelle }) => (
-            <button
-              key={valeur}
-              type="button"
-              className={`chip ${notationFiltre === valeur ? "active" : ""}`}
-              onClick={() => setNotationFiltre(valeur)}
-            >
-              {libelle}
-            </button>
-          ))}
-        </div>
-        <div className="chip-row">
-          {(
-            [
-              { valeur: "Toutes", libelle: "Statut : à traiter" },
-              { valeur: "Envoyees", libelle: `Envoyées (${envoyeesCount})` },
-            ] as const
-          ).map(({ valeur, libelle }) => (
-            <button
-              key={valeur}
-              type="button"
-              className={`chip ${statutFiltre === valeur ? "active" : ""}`}
-              onClick={() => setStatutFiltre(valeur)}
-            >
-              {libelle}
-            </button>
-          ))}
+        <div className="filter-group">
+          <span className="filter-group-label">Statut</span>
+          <div className="chip-row">
+            {(
+              [
+                { valeur: "Toutes", libelle: "Notation : toutes" },
+                { valeur: "NonNotees", libelle: `Non notées (${nonNoteesCount})` },
+                { valeur: "Notees", libelle: "Notées" },
+              ] as const
+            ).map(({ valeur, libelle }) => (
+              <button
+                key={valeur}
+                type="button"
+                className={`chip ${notationFiltre === valeur ? "active" : ""}`}
+                onClick={() => setNotationFiltre(valeur)}
+              >
+                {libelle}
+              </button>
+            ))}
+          </div>
+          <div className="chip-row">
+            {(
+              [
+                { valeur: "Toutes", libelle: "Statut : à traiter" },
+                { valeur: "Envoyees", libelle: `Envoyées (${envoyeesCount})` },
+              ] as const
+            ).map(({ valeur, libelle }) => (
+              <button
+                key={valeur}
+                type="button"
+                className={`chip ${statutFiltre === valeur ? "active" : ""}`}
+                onClick={() => setStatutFiltre(valeur)}
+              >
+                {libelle}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

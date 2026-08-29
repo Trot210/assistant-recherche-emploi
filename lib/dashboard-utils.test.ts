@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   categorieContrat,
+  couleurFortesCorrespondances,
   couleurMatch,
+  couleurScoreMoyen,
   detecterAlternanceParTitre,
   detecterStage,
   domaine,
@@ -18,19 +20,31 @@ describe("couleurMatch", () => {
     expect(couleurMatch(undefined)).toBe("#D9D3C2");
   });
 
-  it("renvoie le brick pur à 0 et l'émeraude pur à 100", () => {
-    expect(couleurMatch(0)).toBe("#a8412b");
+  it("succès (émeraude) à partir de 70", () => {
+    expect(couleurMatch(70)).toBe("#1f6f5c");
     expect(couleurMatch(100)).toBe("#1f6f5c");
   });
 
-  it("produit des couleurs distinctes pour des scores proches (le but du dégradé)", () => {
-    const couleurs = new Set([25, 28, 30, 33, 35].map((s) => couleurMatch(s)));
-    expect(couleurs.size).toBe(5);
+  it("avertissement (ambre) entre 50 et 69", () => {
+    expect(couleurMatch(50)).toBe("#b8791e");
+    expect(couleurMatch(69)).toBe("#b8791e");
   });
 
-  it("ne sort jamais des bornes même avec un score hors plage", () => {
-    expect(couleurMatch(-10)).toBe(couleurMatch(0));
-    expect(couleurMatch(150)).toBe(couleurMatch(100));
+  it("neutre (gris) en dessous de 50", () => {
+    expect(couleurMatch(0)).toBe("#585f6b");
+    expect(couleurMatch(49)).toBe("#585f6b");
+  });
+});
+
+describe("couleurScoreMoyen / couleurFortesCorrespondances", () => {
+  it("alerte (brick) quand la moyenne ou le nombre de fortes correspondances est bas", () => {
+    expect(couleurScoreMoyen(0)).toBe("#a8412b");
+    expect(couleurFortesCorrespondances(0)).toBe("#a8412b");
+  });
+
+  it("succès quand la moyenne ou le nombre de fortes correspondances est haut", () => {
+    expect(couleurScoreMoyen(80)).toBe("#1f6f5c");
+    expect(couleurFortesCorrespondances(5)).toBe("#1f6f5c");
   });
 });
 
