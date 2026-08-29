@@ -31,6 +31,10 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Assistant Recherche d'Emploi",
   description: "Centralise, score et prépare vos candidatures en Île-de-France.",
+  icons: {
+    icon: "/favicon-32.png",
+    apple: "/apple-touch-icon.png",
+  },
 };
 
 export default function RootLayout({
