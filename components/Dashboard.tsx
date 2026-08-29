@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OffreAvecDetails } from "@/types/dashboard";
@@ -45,6 +45,7 @@ export default function Dashboard({ offres }: Props) {
   const [notationFiltre, setNotationFiltre] = useState<FiltreNotation>("Toutes");
   const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
   const [page, setPage] = useState(1);
+  const gridRef = useRef<HTMLDivElement>(null);
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [suiviOuvert, setSuiviOuvert] = useState(false);
@@ -114,6 +115,11 @@ export default function Dashboard({ offres }: Props) {
     (pageActuelle - 1) * TAILLE_PAGE,
     pageActuelle * TAILLE_PAGE,
   );
+
+  function changerPage(nouvellePage: number) {
+    setPage(nouvellePage);
+    gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   const nonNoteesCount = useMemo(
     () => offresPertinentes.filter((o) => !o.score).length,
@@ -431,7 +437,7 @@ export default function Dashboard({ offres }: Props) {
         <div className="empty">Aucune offre ne correspond à ces filtres.</div>
       ) : (
         <>
-          <div className="grid">
+          <div className="grid" ref={gridRef}>
             {offresPage.map((offre) => (
               <OfferCard
                 key={offre.id}
@@ -451,7 +457,7 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => changerPage(Math.max(1, pageActuelle - 1))}
                 disabled={pageActuelle === 1}
               >
                 ← Précédent
@@ -467,7 +473,7 @@ export default function Dashboard({ offres }: Props) {
                       key={entree}
                       type="button"
                       className={`chip ${entree === pageActuelle ? "active" : ""}`}
-                      onClick={() => setPage(entree)}
+                      onClick={() => changerPage(entree)}
                     >
                       {entree}
                     </button>
@@ -477,7 +483,7 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => setPage((p) => Math.min(nbPages, p + 1))}
+                onClick={() => changerPage(Math.min(nbPages, pageActuelle + 1))}
                 disabled={pageActuelle === nbPages}
               >
                 Suivant →
