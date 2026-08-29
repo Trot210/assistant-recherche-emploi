@@ -13,6 +13,43 @@ export const maxDuration = 60;
 // Départements Île-de-France : Paris intra-muros + petite/grande couronne.
 const DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"];
 
+// La synchro n'a jamais supprimé les offres expirées/pourvues, seulement
+// ajouté — le catalogue grossissait indéfiniment (900+ offres après
+// quelques semaines), ce qui alourdit chaque chargement du dashboard.
+// Purge les offres auto-synchronisées de plus de 60 jours, sauf celles
+// liées à une candidature (jamais celles où tu as généré des documents ou
+// que tu as marquées) : elles restent, quel que soit leur âge.
+const RETENTION_JOURS = 60;
+
+async function purgerOffresPerimees(
+  supabase: Awaited<ReturnType<typeof createAdminClient>> | Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+): Promise<number> {
+  const seuil = new Date();
+  seuil.setDate(seuil.getDate() - RETENTION_JOURS);
+  const seuilStr = seuil.toISOString().slice(0, 10);
+
+  const { data: candidatures } = await supabase
+    .from("candidatures")
+    .select("offre_id")
+    .eq("user_id", userId);
+  const idsAConserver = (candidatures ?? []).map((c) => c.offre_id);
+
+  let requete = supabase
+    .from("offres")
+    .delete({ count: "exact" })
+    .eq("user_id", userId)
+    .in("source", ["france_travail", "apec"])
+    .lt("date_publication", seuilStr);
+
+  if (idsAConserver.length > 0) {
+    requete = requete.not("id", "in", `(${idsAConserver.join(",")})`);
+  }
+
+  const { count } = await requete;
+  return count ?? 0;
+}
+
 // L'API France Travail ne supporte qu'un seul mot-clé/phrase par requête
 // (les virgules ne fonctionnent pas comme un "OU") : on boucle sur chaque
 // mot-clé pour chaque département. Utilisés par défaut par le job planifié
@@ -117,8 +154,9 @@ export async function POST(request: Request) {
   const offres = Array.from(offresParId.values());
 
   if (offres.length === 0) {
+    const purgees = await purgerOffresPerimees(supabase, userId);
     return NextResponse.json(
-      { inserted: 0, erreurs },
+      { inserted: 0, purgees, erreurs },
       { status: erreurs.length > 0 ? 502 : 200 },
     );
   }
@@ -131,5 +169,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message, erreurs }, { status: 500 });
   }
 
-  return NextResponse.json({ synced: count ?? offres.length, erreurs });
+  const purgees = await purgerOffresPerimees(supabase, userId);
+
+  return NextResponse.json({ synced: count ?? offres.length, purgees, erreurs });
 }

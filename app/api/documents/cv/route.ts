@@ -1,24 +1,12 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { resolveProfilEtOffre } from "@/lib/api/resolveProfilEtOffre";
 import { genererContenuCV } from "@/lib/anthropic/documents";
 import { buildCvPdf } from "@/lib/documents/pdf";
-
-const UN_AN_EN_SECONDES = 60 * 60 * 24 * 365;
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
-  }
-
   const body = await request.json().catch(() => null);
   const offreId = body?.offre_id;
 
@@ -26,32 +14,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "offre_id est requis" }, { status: 400 });
   }
 
-  const [{ data: profil, error: profilError }, { data: offre, error: offreError }] =
-    await Promise.all([
-      supabase.from("profil").select().eq("user_id", user.id).maybeSingle(),
-      supabase.from("offres").select().eq("id", offreId).eq("user_id", user.id).maybeSingle(),
-    ]);
-
-  if (profilError) {
-    return NextResponse.json({ error: profilError.message }, { status: 500 });
+  const resolu = await resolveProfilEtOffre(offreId);
+  if ("error" in resolu) {
+    return NextResponse.json({ error: resolu.error }, { status: resolu.status });
   }
-  if (offreError) {
-    return NextResponse.json({ error: offreError.message }, { status: 500 });
-  }
-  if (!profil) {
-    return NextResponse.json(
-      { error: "Profil non renseigné — remplis-le via PUT /api/profil avant de générer un CV" },
-      { status: 400 },
-    );
-  }
-  if (!offre) {
-    return NextResponse.json({ error: "Offre introuvable" }, { status: 404 });
-  }
+  const { supabase, user, profil, offre } = resolu;
 
   try {
     const { contenu, avertissements } = await genererContenuCV(profil, offre);
     const buffer = await buildCvPdf(contenu, profil.contact, profil.formation, profil.activites);
 
+    // On ne stocke que le chemin du fichier, pas d'URL signée : une URL
+    // signée avec une longue durée de vie, stockée en base et affichée
+    // dans le dashboard, resterait valable pour quiconque l'intercepte
+    // (historique navigateur, capture d'écran...). Une URL fraîche et de
+    // courte durée est générée à la demande par /api/documents/[offreId]/cv.
     const path = `${user.id}/${offre.id}/cv.pdf`;
     const { error: uploadError } = await supabase.storage
       .from("documents")
@@ -61,21 +38,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: uploadError.message }, { status: 500 });
     }
 
-    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
-      .from("documents")
-      .createSignedUrl(path, UN_AN_EN_SECONDES);
-
-    if (signedUrlError || !signedUrlData) {
-      return NextResponse.json(
-        { error: signedUrlError?.message ?? "Erreur de génération de l'URL signée" },
-        { status: 500 },
-      );
-    }
-
     const { data: candidature, error: candidatureError } = await supabase
       .from("candidatures")
       .upsert(
-        { user_id: user.id, offre_id: offre.id, cv_genere_url: signedUrlData.signedUrl },
+        { user_id: user.id, offre_id: offre.id, cv_genere_url: path },
         { onConflict: "offre_id" },
       )
       .select()

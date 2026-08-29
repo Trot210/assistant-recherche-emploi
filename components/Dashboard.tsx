@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OffreAvecDetails } from "@/types/dashboard";
@@ -42,6 +42,9 @@ export default function Dashboard({ offres, userEmail }: Props) {
   const [syncEnCours, setSyncEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissements, setAvertissements] = useState<string[]>([]);
+  // Cache des descriptions récupérées à la demande (voir app/page.tsx : la
+  // liste initiale ne les inclut pas, pour rester légère).
+  const [descriptions, setDescriptions] = useState<Record<string, string | null>>({});
 
   const sourcesDisponibles = useMemo(() => {
     const set = new Set(offres.map((o) => o.source));
@@ -97,7 +100,29 @@ export default function Dashboard({ offres, userEmail }: Props) {
     return { total, fortes, moyenne, documentsPrets };
   }, [offresPertinentes]);
 
-  const offreSelectionnee = offres.find((o) => o.id === offreSelectionneeId) ?? null;
+  const offreSelectionneeBrute = offres.find((o) => o.id === offreSelectionneeId) ?? null;
+  const offreSelectionnee = offreSelectionneeBrute
+    ? {
+        ...offreSelectionneeBrute,
+        description: descriptions[offreSelectionneeBrute.id] ?? offreSelectionneeBrute.description,
+      }
+    : null;
+
+  useEffect(() => {
+    if (!offreSelectionneeId || offreSelectionneeId in descriptions) return;
+    let annule = false;
+    fetch(`/api/offres/${offreSelectionneeId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!annule && data.offre) {
+          setDescriptions((prev) => ({ ...prev, [offreSelectionneeId]: data.offre.description }));
+        }
+      })
+      .catch(() => {});
+    return () => {
+      annule = true;
+    };
+  }, [offreSelectionneeId, descriptions]);
 
   function rafraichir() {
     startTransition(() => router.refresh());
@@ -185,6 +210,20 @@ export default function Dashboard({ offres, userEmail }: Props) {
       rafraichir();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la mise à jour");
+    }
+  }
+
+  async function supprimerOffre(offreId: string) {
+    if (!window.confirm("Supprimer cette offre ? Cette action est irréversible.")) return;
+    setErreur(null);
+    try {
+      const res = await fetch(`/api/offres/${offreId}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la suppression");
+      setOffreSelectionneeId(null);
+      rafraichir();
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de la suppression");
     }
   }
 
@@ -286,24 +325,26 @@ export default function Dashboard({ offres, userEmail }: Props) {
         </select>
         <div className="chip-row">
           {sourcesDisponibles.map((s) => (
-            <div
+            <button
               key={s}
+              type="button"
               className={`chip ${source === s ? "active" : ""}`}
               onClick={() => setSource(s)}
             >
               {s === "Toutes" ? "Toutes" : libelleSource(s)}
-            </div>
+            </button>
           ))}
         </div>
         <div className="chip-row">
           {(["Toutes", "CDI", "CDD", "Alternance", "Stage", "Autre"] as const).map((c) => (
-            <div
+            <button
               key={c}
+              type="button"
               className={`chip ${contrat === c ? "active" : ""}`}
               onClick={() => setContrat(c)}
             >
               {c}
-            </div>
+            </button>
           ))}
         </div>
         <div className="chip-row">
@@ -314,13 +355,14 @@ export default function Dashboard({ offres, userEmail }: Props) {
               { valeur: "Notees", libelle: "Notées" },
             ] as const
           ).map(({ valeur, libelle }) => (
-            <div
+            <button
               key={valeur}
+              type="button"
               className={`chip ${notationFiltre === valeur ? "active" : ""}`}
               onClick={() => setNotationFiltre(valeur)}
             >
               {libelle}
-            </div>
+            </button>
           ))}
         </div>
       </div>
@@ -358,6 +400,7 @@ export default function Dashboard({ offres, userEmail }: Props) {
           onGenererMessage={() => genererMessage(offreSelectionnee.id)}
           onNoter={() => noterOffre(offreSelectionnee.id)}
           onMarquerEnvoyee={() => marquerStatut(offreSelectionnee.id, "envoyee")}
+          onSupprimer={() => supprimerOffre(offreSelectionnee.id)}
         />
       )}
 

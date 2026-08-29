@@ -21,6 +21,7 @@ interface Props {
   onGenererMessage: () => void;
   onNoter: () => void;
   onMarquerEnvoyee: () => void;
+  onSupprimer: () => void;
 }
 
 export default function OfferPanel({
@@ -33,6 +34,7 @@ export default function OfferPanel({
   onGenererMessage,
   onNoter,
   onMarquerEnvoyee,
+  onSupprimer,
 }: Props) {
   const couleur = couleurMatch(offre.score?.score);
   const envoyee = offre.candidature?.statut === "envoyee";
@@ -81,7 +83,11 @@ export default function OfferPanel({
 
           <div className="panel-section">
             <h3>Description du poste</h3>
-            <p>{offre.description ?? "Aucune description disponible."}</p>
+            <p>
+              {offre.description === undefined
+                ? "Chargement..."
+                : (offre.description ?? "Aucune description disponible.")}
+            </p>
           </div>
 
           {offre.score && (
@@ -139,7 +145,7 @@ export default function OfferPanel({
                       </div>
                       <a
                         className="doc-dl"
-                        href={offre.candidature.cv_genere_url}
+                        href={`/api/documents/${offre.id}/cv`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -155,7 +161,7 @@ export default function OfferPanel({
                       </div>
                       <a
                         className="doc-dl"
-                        href={offre.candidature.lm_generee_url}
+                        href={`/api/documents/${offre.id}/lettre`}
                         target="_blank"
                         rel="noopener noreferrer"
                       >
@@ -217,6 +223,17 @@ export default function OfferPanel({
                 )}
               </div>
             </div>
+          </div>
+
+          <div className="panel-section">
+            <button
+              type="button"
+              className="btn-link"
+              style={{ color: "var(--brick)", cursor: "pointer" }}
+              onClick={onSupprimer}
+            >
+              Supprimer cette offre
+            </button>
           </div>
         </div>
       </div>
