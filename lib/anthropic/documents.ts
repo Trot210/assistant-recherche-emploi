@@ -214,7 +214,7 @@ La lettre doit démontrer une compréhension concrète de l'entreprise et du pos
 
 Interdiction stricte des formules creuses et génériques — proscris notamment "je suis convaincu(e) que mon profil correspond parfaitement à vos attentes", "passionné(e) par votre secteur d'activité", "fort de mon expérience" sans fait concret immédiatement après, ou toute phrase de motivation qui ne dit pas pourquoi CETTE entreprise précisément. Chaque affirmation doit s'appuyer sur un fait réel du profil ou un élément précis de la description de l'offre — jamais une généralité qui pourrait s'appliquer à n'importe quel candidat ou n'importe quelle entreprise. Registre factuel et dense, cohérent avec un CV structuré.
 
-Structure attendue : commence par "Madame, Monsieur," sur sa propre ligne (seule sur son paragraphe), puis 3-4 paragraphes développés, puis une formule de politesse de clôture suivie du prénom et nom du candidat sur sa propre ligne.
+Structure attendue : commence par "Madame, Monsieur," sur sa propre ligne (seule sur son paragraphe), puis 3-4 paragraphes développés, puis une formule de politesse de clôture. Ne termine PAS par le nom du candidat ni par une ligne de signature : l'application l'ajoute automatiquement après ton texte.
 
 Contrainte impérative : la lettre doit remplir une page A4 sans déborder sur une deuxième — vise 420-480 mots au total (hors salutation d'ouverture et de clôture), répartis sur les paragraphes développés (pas de phrases trop courtes ni de liste à puces). Réponds en texte brut uniquement — jamais de markdown (pas d'astérisques, pas de dièses, pas de balisage) —, sans commentaire, sans bloc d'adresse en en-tête (le nom et les coordonnées du candidat figurent déjà séparément en haut du document).`,
     messages: [{ role: "user", content: contexte(profil, offre) }],
@@ -230,7 +230,16 @@ Contrainte impérative : la lettre doit remplir une page A4 sans déborder sur u
     throw new Error("Claude n'a renvoyé aucun texte pour la lettre de motivation");
   }
 
-  const texte = nettoyerMarkdown(texteBrut);
+  // Le nom du candidat vient du profil, jamais du modèle — même garantie
+  // structurelle que pour les métadonnées du CV. Le prompt demande à Claude
+  // de ne pas signer, mais on retire quand même une éventuelle signature ou
+  // un placeholder résiduel ("Prénom Nom", "[Nom]"...) en défense en
+  // profondeur, avant d'ajouter le vrai nom.
+  const SIGNATURE_RESIDUELLE = /\n+\s*\[?\s*(pr[ée]nom\s+nom|nom\s+pr[ée]nom)\s*\]?\s*$/i;
+  const texteSansSignature = nettoyerMarkdown(texteBrut).replace(SIGNATURE_RESIDUELLE, "");
+  const texte = profil.contact.nom
+    ? `${texteSansSignature}\n\n${profil.contact.nom}`
+    : texteSansSignature;
 
   const avertissements = await verifierFidelite(profil, offre, texte, "Lettre de motivation");
 
