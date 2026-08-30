@@ -18,21 +18,47 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
   const [texteColle, setTexteColle] = useState("");
   const [extraction, setExtraction] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [avertissementExtraction, setAvertissementExtraction] = useState<string | null>(null);
   const [envoi, setEnvoi] = useState(false);
 
+  // Un lien LinkedIn/Indeed/WTTJ seul n'a rien à extraire : ces sites
+  // bloquent le scraping, donc contrairement à ce à quoi on pourrait
+  // s'attendre, coller le LIEN de l'annonce ne suffit pas — il faut copier
+  // le TEXTE affiché sur la page. Ce cas est repéré avant d'appeler l'API
+  // (inutile de payer un appel Claude pour extraire une URL nue), et le
+  // lien lui-même est récupéré pour pré-remplir le champ correspondant.
+  const MOTIF_URL_SEULE = /^https?:\/\/\S+$/;
+
   async function extraireAutomatiquement() {
-    if (!texteColle.trim()) return;
+    const texte = texteColle.trim();
+    if (!texte) return;
     setErreur(null);
+    setAvertissementExtraction(null);
+
+    if (MOTIF_URL_SEULE.test(texte)) {
+      setLienOriginal(texte);
+      setAvertissementExtraction(
+        "Ceci est un lien, pas le texte de l'annonce — LinkedIn (et la plupart des jobboards) bloque la lecture automatique d'une simple URL. Ouvre l'annonce, sélectionne tout son contenu (Cmd/Ctrl+A puis Cmd/Ctrl+C) et colle-le ici à la place. Le lien a été repris ci-dessous.",
+      );
+      return;
+    }
+
     setExtraction(true);
     try {
       const res = await fetch("/api/offres/extraire", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ texte: texteColle }),
+        body: JSON.stringify({ texte }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'extraction");
       const offre = data.offre;
+      if (!offre.titre && !offre.entreprise && !offre.description) {
+        setAvertissementExtraction(
+          "Rien d'exploitable n'a été trouvé dans ce texte — vérifie que tu as bien collé le contenu complet de l'annonce (et pas juste un lien ou un extrait trop court).",
+        );
+        return;
+      }
       setTitre(offre.titre ?? "");
       setEntreprise(offre.entreprise ?? "");
       setLocalisation(offre.localisation ?? "");
@@ -83,7 +109,7 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
           </label>
           <textarea
             id="texte-colle"
-            placeholder="Copie-colle ici le titre, l'entreprise et la description depuis LinkedIn, Welcome to the Jungle, Indeed..."
+            placeholder="Ouvre l'annonce sur LinkedIn / Welcome to the Jungle / Indeed, sélectionne tout son contenu (Cmd/Ctrl+A) et colle-le ici — pas juste le lien, ces sites bloquent la lecture automatique d'une simple URL."
             value={texteColle}
             onChange={(e) => setTexteColle(e.target.value)}
           />
@@ -96,6 +122,7 @@ export default function AddOfferModal({ onFermer, onAjoutee }: Props) {
           >
             {extraction ? "Extraction..." : "Extraire automatiquement"}
           </button>
+          {avertissementExtraction && <p className="error-text">{avertissementExtraction}</p>}
         </div>
         <form onSubmit={handleSubmit}>
           <div className="field">
