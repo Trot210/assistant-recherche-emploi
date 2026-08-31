@@ -27,8 +27,10 @@ export async function scoreCompatibilite(
 Règle essentielle — ne pas pénaliser l'intitulé de poste : ce candidat est délibérément ouvert à plusieurs intitulés différents (voir "Intitulés ciblés" dans ses préférences), pas à un seul poste précis. En conséquence :
 - Ne baisse JAMAIS le score uniquement parce que le titre de l'offre diffère du titre de l'expérience la plus récente du candidat (ex: une offre "Chef de Produit" pour un candidat actuellement "Category Manager" ne doit pas être pénalisée pour cette seule raison).
 - Évalue la compatibilité sur le chevauchement RÉEL des missions et responsabilités décrites dans l'offre avec l'expérience du candidat (gestion de gamme/catégorie, pricing, négociation fournisseurs, coordination transverse, analyse de performance, etc.), pas sur la similarité littérale des intitulés.
-- Prends en compte, dans cet ordre d'importance : (1) le chevauchement réel des missions/responsabilités, (2) les compétences et outils transférables, (3) le secteur d'activité et le type d'environnement (distribution, PGC, B2B, grande consommation...), (4) la localisation et le type de contrat.
+- Prends en compte, dans cet ordre d'importance : (1) le chevauchement réel des missions/responsabilités, (2) les compétences et outils transférables, (3) le niveau de langues exigé par l'offre par rapport au niveau réel du candidat, (4) le secteur d'activité et le type d'environnement (distribution, PGC, B2B, grande consommation...), (5) la localisation et le type de contrat.
 - Un intitulé différent mais des missions très proches doit produire un score élevé. Un intitulé identique mais des missions très différentes doit produire un score bas.
+
+Langues : si l'offre exige explicitement un niveau de langue (ex: anglais courant, bilingue, C1, "fluent"...), compare-le au niveau réel du candidat indiqué dans son profil. Un niveau du candidat égal ou supérieur à ce qui est demandé ne doit entraîner AUCUNE pénalisation. Un niveau nettement inférieur à ce qui est explicitement exigé est un écart réel à signaler dans "ecarts", et doit pondérer modérément le score à la baisse — sans éliminer l'offre si le reste du profil correspond bien. Ne pénalise JAMAIS sur la langue si l'offre ne précise aucune exigence de niveau, ou si elle demande un niveau que le candidat atteint ou dépasse déjà.
 
 Sois factuel, concis et base-toi uniquement sur les informations fournies.`,
     messages: [
@@ -37,6 +39,7 @@ Sois factuel, concis et base-toi uniquement sur les informations fournies.`,
         content: `Profil du candidat :
 Compétences : ${profil.competences.length > 0 ? profil.competences.join(", ") : "non renseignées"}
 Expériences : ${profil.experiences.length > 0 ? JSON.stringify(profil.experiences) : "non renseignées"}
+Langues : ${profil.contact?.langues && profil.contact.langues.length > 0 ? profil.contact.langues.join(", ") : "non renseignées"}
 CV : ${profil.cv_texte ?? "non renseigné"}
 Préférences (intitulés ciblés, localisations, types de contrat) : ${JSON.stringify(profil.preferences)}
 
