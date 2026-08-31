@@ -32,8 +32,13 @@ export const metadata: Metadata = {
   title: "Assistant Recherche d'Emploi",
   description: "Centralise, score et prépare vos candidatures en Île-de-France.",
   icons: {
-    icon: "/favicon-32.png",
-    apple: "/apple-touch-icon.png",
+    // "?v=1" force les navigateurs à traiter l'icône comme une ressource
+    // distincte de tout ce qui a pu être mis en cache avant — Chrome garde
+    // son cache de favicon indépendamment du reste de la page, et même un
+    // rechargement forcé ne le rafraîchit pas toujours. À incrémenter si le
+    // favicon change à nouveau.
+    icon: "/favicon-32.png?v=1",
+    apple: "/apple-touch-icon.png?v=1",
   },
 };
 
