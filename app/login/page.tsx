@@ -31,47 +31,43 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm"
-      >
-        <h1 className="mb-6 text-xl font-semibold text-gray-900">Connexion</h1>
+    <main className="login-page">
+      <div className="login-card">
+        <div className="login-brand">
+          <p className="login-eyebrow">Cycle de candidatures</p>
+          <h1 className="brand-title">Le Rayon</h1>
+        </div>
 
-        <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="email">
-          Email
-        </label>
-        <input
-          id="email"
-          type="email"
-          required
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          className="mb-4 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
-        />
+        <form onSubmit={handleSubmit}>
+          <div className="field">
+            <label htmlFor="email">Email</label>
+            <input
+              id="email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </div>
 
-        <label className="mb-1 block text-sm font-medium text-gray-700" htmlFor="password">
-          Mot de passe
-        </label>
-        <input
-          id="password"
-          type="password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="mb-6 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
-        />
+          <div className="field">
+            <label htmlFor="password">Mot de passe</label>
+            <input
+              id="password"
+              type="password"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
 
-        {erreur && <p className="mb-4 text-sm text-red-600">{erreur}</p>}
+          {erreur && <p className="error-text">{erreur}</p>}
 
-        <button
-          type="submit"
-          disabled={chargement}
-          className="w-full rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
-        >
-          {chargement ? "Connexion..." : "Se connecter"}
-        </button>
-      </form>
+          <button type="submit" className="btn btn-primary" disabled={chargement}>
+            {chargement ? "Connexion..." : "Se connecter"}
+          </button>
+        </form>
+      </div>
     </main>
   );
 }

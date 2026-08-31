@@ -736,6 +736,48 @@ select {
   margin: -8px 0 14px;
 }
 
+/* login */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  padding: 24px;
+}
+.login-card {
+  width: 100%;
+  max-width: 380px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 44px 32px;
+}
+.login-brand {
+  text-align: center;
+  margin-bottom: 32px;
+}
+.login-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 6px;
+}
+.login-card .brand-title {
+  font-size: 34px;
+  margin: 0;
+}
+/* Contraste avec le fond de la carte (var(--card)) : les champs génériques
+   .field input partagent ce même ton, ce qui fonctionne dans une modale
+   posée sur var(--paper) mais se fondrait ici — on les éclaircit d'un cran. */
+.login-card .field input {
+  background: var(--paper);
+}
+.login-card .btn {
+  width: 100%;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 34px;
