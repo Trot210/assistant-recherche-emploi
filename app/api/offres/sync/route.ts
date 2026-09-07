@@ -16,12 +16,12 @@ export const maxDuration = 60;
 const DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"];
 
 // La synchro n'a jamais supprimé les offres expirées/pourvues, seulement
-// ajouté — le catalogue grossissait indéfiniment (900+ offres après
+// ajouté — le catalogue grossissait indéfiniment (près de 5000 offres après
 // quelques semaines), ce qui alourdit chaque chargement du dashboard.
-// Purge les offres auto-synchronisées de plus de 60 jours, sauf celles
+// Purge les offres auto-synchronisées de plus de 1,5 mois, sauf celles
 // liées à une candidature (jamais celles où tu as généré des documents ou
 // que tu as marquées) : elles restent, quel que soit leur âge.
-const RETENTION_JOURS = 60;
+const RETENTION_JOURS = 45;
 
 async function purgerOffresPerimees(
   supabase: Awaited<ReturnType<typeof createAdminClient>> | Awaited<ReturnType<typeof createClient>>,
