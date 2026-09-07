@@ -189,7 +189,62 @@ export interface Database {
       };
     };
     Views: { [_ in never]: never };
-    Functions: { [_ in never]: never };
+    // Non régénéré automatiquement (pas d'accès CLI/DB direct depuis cet
+    // environnement) — déclarées à la main pour correspondre exactement aux
+    // fonctions SQL de supabase/migrations/0011_offres_filtrees_rpc.sql.
+    // À tenir manuellement en phase avec cette migration si elle évolue.
+    Functions: {
+      offres_filtrees: {
+        Args: {
+          p_recherche?: string;
+          p_source?: string;
+          p_contrat?: string;
+          p_localisation?: string;
+          p_notation?: string;
+          p_statut?: string;
+          p_tri?: string;
+          p_page?: number;
+          p_taille_page?: number;
+          p_user_id?: string | null;
+        };
+        Returns: {
+          id: string;
+          titre: string;
+          entreprise: string | null;
+          source: string;
+          source_id: string;
+          lien_original: string;
+          localisation: string | null;
+          date_publication: string | null;
+          created_at: string;
+          type_contrat: string | null;
+          type_contrat_libelle: string | null;
+          alternance: boolean;
+          stage: boolean;
+          score: number | null;
+          points_forts: string[] | null;
+          ecarts: string[] | null;
+          candidature_statut: CandidatureStatut | null;
+          candidature_date_envoi: string | null;
+          candidature_cv_genere_url: string | null;
+          candidature_lm_generee_url: string | null;
+          candidature_message_motivation: string | null;
+          total_count: number;
+        }[];
+      };
+      offres_stats: {
+        Args: { p_user_id?: string | null };
+        Returns: {
+          total: number;
+          fortes: number;
+          moyenne: number;
+          documents_prets: number;
+          non_notees: number;
+          envoyees: number;
+          sources: string[];
+        }[];
+      };
+    };
     Enums: {
       candidature_statut: CandidatureStatut;
     };

@@ -1,17 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OffreAvecDetails } from "@/types/dashboard";
+import type { Candidature } from "@/types/candidature";
 import {
-  estParisIntraMuros,
   libelleSource,
-  categorieContrat,
-  estStageOuAlternance,
-  estEnvoyeeOuPlus,
-  couleurFortesCorrespondances,
-  couleurScoreMoyen,
   calculerPagesAffichees,
   type CategorieContrat,
   type CandidatureStatut,
@@ -21,22 +16,47 @@ import OfferPanel from "./OfferPanel";
 import CandidatureTrackerModal from "./CandidatureTrackerModal";
 import AddOfferModal from "./AddOfferModal";
 
-interface Props {
-  offres: OffreAvecDetails[];
-}
-
 type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
 type Tri = "score-desc" | "score-asc" | "date-desc";
 type FiltreLocalisation = "Toutes" | "Paris" | "IDF";
 type FiltreNotation = "Toutes" | "Notees" | "NonNotees";
 type FiltreStatut = "Toutes" | "Envoyees";
 
+interface StatsDashboard {
+  total: number;
+  fortes: number;
+  moyenne: number;
+  documentsPrets: number;
+  nonNotees: number;
+  envoyees: number;
+  sources: string[];
+}
+
+const STATS_VIDES: StatsDashboard = {
+  total: 0,
+  fortes: 0,
+  moyenne: 0,
+  documentsPrets: 0,
+  nonNotees: 0,
+  envoyees: 0,
+  sources: [],
+};
+
 const TAILLE_PAGE = 24;
+const DEBOUNCE_RECHERCHE_MS = 300;
 
-export default function Dashboard({ offres }: Props) {
+// Le filtrage/tri/pagination de la liste principale se fait désormais côté
+// base (RPC offres_filtrees, voir supabase/migrations/0011) plutôt qu'en
+// mémoire sur la totalité du catalogue — celui-ci a dépassé les 1000 lignes
+// que PostgREST charge par défaut et continue de grossir. Seule la fiche
+// détail d'une offre (jamais plus d'une à la fois) et le suivi des
+// candidatures (borné au nombre de candidatures suivies, pas au catalogue)
+// utilisent encore une requête directe avec jointure embarquée.
+export default function Dashboard() {
   const router = useRouter();
-  const [isPending, startTransition] = useTransition();
+  const supabase = useMemo(() => createClient(), []);
 
+  const [rechercheInput, setRechercheInput] = useState("");
   const [recherche, setRecherche] = useState("");
   const [source, setSource] = useState("Toutes");
   const [contrat, setContrat] = useState<CategorieContrat | "Toutes">("Toutes");
@@ -47,75 +67,193 @@ export default function Dashboard({ offres }: Props) {
   const [page, setPage] = useState(1);
   const gridRef = useRef<HTMLDivElement>(null);
   const premierRenduPage = useRef(true);
+
+  const [offresPage, setOffresPage] = useState<OffreAvecDetails[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [chargementListe, setChargementListe] = useState(true);
+  const [stats, setStats] = useState<StatsDashboard>(STATS_VIDES);
+
   const [offreSelectionneeId, setOffreSelectionneeId] = useState<string | null>(null);
+  const [offreDetail, setOffreDetail] = useState<OffreAvecDetails | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [suiviOuvert, setSuiviOuvert] = useState(false);
+  const [candidaturesSuivies, setCandidaturesSuivies] = useState<OffreAvecDetails[]>([]);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
   const [syncEnCours, setSyncEnCours] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissements, setAvertissements] = useState<string[]>([]);
-  // Cache des descriptions récupérées à la demande (voir app/page.tsx : la
-  // liste initiale ne les inclut pas, pour rester légère).
-  const [descriptions, setDescriptions] = useState<Record<string, string | null>>({});
 
-  const sourcesDisponibles = useMemo(() => {
-    const set = new Set(offres.map((o) => o.source));
-    return ["Toutes", ...Array.from(set)];
-  }, [offres]);
+  // Débounce de la recherche texte : évite une requête à chaque frappe.
+  useEffect(() => {
+    const t = setTimeout(() => setRecherche(rechercheInput), DEBOUNCE_RECHERCHE_MS);
+    return () => clearTimeout(t);
+  }, [rechercheInput]);
 
-  // Stages et alternances sont exclus par défaut des résultats et des
-  // statistiques (système de recommandation) — sélectionner explicitement
-  // le filtre "Alternance" ou "Stage" les fait réapparaître.
-  const offresPertinentes = useMemo(() => offres.filter((o) => !estStageOuAlternance(o)), [offres]);
-
-  const offresFiltrees = useMemo(() => {
-    let liste = offres.filter((o) => {
-      const texte = `${o.titre} ${o.entreprise ?? ""}`.toLowerCase();
-      const matchRecherche = texte.includes(recherche.toLowerCase());
-      const matchSource = source === "Toutes" || o.source === source;
-      const matchContrat =
-        contrat === "Toutes" ? !estStageOuAlternance(o) : categorieContrat(o) === contrat;
-      const matchLocalisation =
-        localisationFiltre === "Toutes" ||
-        (localisationFiltre === "Paris"
-          ? estParisIntraMuros(o.localisation)
-          : !estParisIntraMuros(o.localisation));
-      const matchNotation =
-        notationFiltre === "Toutes" ||
-        (notationFiltre === "NonNotees" ? !o.score : Boolean(o.score));
-      // Une offre déjà envoyée (ou plus avancée : réponse reçue, entretien,
-      // refus, offre) est retirée du dashboard principal par défaut — elle
-      // vit désormais dans le suivi des candidatures. Le filtre "Envoyées"
-      // permet de la retrouver explicitement, comme pour les stages/alternances.
-      const envoyeeOuPlus = estEnvoyeeOuPlus(o.candidature?.statut);
-      const matchStatut = statutFiltre === "Envoyees" ? envoyeeOuPlus : !envoyeeOuPlus;
-      return (
-        matchRecherche && matchSource && matchContrat && matchLocalisation && matchNotation && matchStatut
-      );
-    });
-    liste = [...liste].sort((a, b) => {
-      if (tri === "score-desc") return (b.score?.score ?? -1) - (a.score?.score ?? -1);
-      if (tri === "score-asc") return (a.score?.score ?? 999) - (b.score?.score ?? 999);
-      return (b.date_publication ?? "").localeCompare(a.date_publication ?? "");
-    });
-    return liste;
-  }, [offres, recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
-
-  // Retour en page 1 dès qu'un filtre ou la recherche change — sinon on
-  // peut se retrouver sur une page vide après avoir réduit les résultats.
+  // Retour en page 1 dès qu'un filtre ou la recherche (débouncée) change —
+  // sinon on peut se retrouver sur une page vide après avoir réduit les
+  // résultats.
   useEffect(() => {
     setPage(1);
   }, [recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
 
-  const nbPages = Math.max(1, Math.ceil(offresFiltrees.length / TAILLE_PAGE));
-  // Se raccroche à la dernière page valide plutôt que d'afficher une page
-  // vide si le nombre de résultats a diminué (offre supprimée, etc.) sans
-  // que le filtre lui-même ait changé.
-  const pageActuelle = Math.min(page, nbPages);
-  const offresPage = offresFiltrees.slice(
-    (pageActuelle - 1) * TAILLE_PAGE,
-    pageActuelle * TAILLE_PAGE,
+  const chargerPage = useCallback(async () => {
+    setChargementListe(true);
+    const { data, error } = await supabase.rpc("offres_filtrees", {
+      p_recherche: recherche,
+      p_source: source,
+      p_contrat: contrat,
+      p_localisation: localisationFiltre,
+      p_notation: notationFiltre,
+      p_statut: statutFiltre,
+      p_tri: tri,
+      p_page: page,
+      p_taille_page: TAILLE_PAGE,
+    });
+    if (error) {
+      setErreur(error.message);
+      setChargementListe(false);
+      return;
+    }
+    const lignes = data ?? [];
+    const total = lignes[0]?.total_count ?? 0;
+    // Filtres réduits/offre supprimée pendant qu'on était sur une page qui
+    // n'existe plus : on se raccroche à la dernière page valide plutôt que
+    // d'afficher une liste vide.
+    const nbPages = Math.max(1, Math.ceil(total / TAILLE_PAGE));
+    if (lignes.length === 0 && total > 0 && page > nbPages) {
+      setPage(nbPages);
+      return;
+    }
+    setTotalCount(total);
+    setOffresPage(
+      lignes.map((l) => ({
+        id: l.id,
+        user_id: "",
+        titre: l.titre,
+        entreprise: l.entreprise,
+        source: l.source,
+        source_id: l.source_id,
+        lien_original: l.lien_original,
+        localisation: l.localisation,
+        date_publication: l.date_publication,
+        created_at: l.created_at,
+        type_contrat: l.type_contrat,
+        type_contrat_libelle: l.type_contrat_libelle,
+        alternance: l.alternance,
+        stage: l.stage,
+        description: undefined,
+        score:
+          l.score == null
+            ? null
+            : {
+                id: l.id,
+                user_id: "",
+                offre_id: l.id,
+                score: l.score,
+                points_forts: l.points_forts ?? [],
+                ecarts: l.ecarts ?? [],
+                calculated_at: l.created_at,
+              },
+        candidature:
+          l.candidature_statut == null
+            ? null
+            : {
+                id: l.id,
+                user_id: "",
+                offre_id: l.id,
+                date_envoi: l.candidature_date_envoi,
+                statut: l.candidature_statut as CandidatureStatut,
+                cv_genere_url: l.candidature_cv_genere_url,
+                lm_generee_url: l.candidature_lm_generee_url,
+                message_motivation: l.candidature_message_motivation,
+                created_at: l.created_at,
+                updated_at: l.created_at,
+              },
+      })),
+    );
+    setChargementListe(false);
+  }, [supabase, recherche, source, contrat, localisationFiltre, notationFiltre, statutFiltre, tri, page]);
+
+  const chargerStats = useCallback(async () => {
+    const { data, error } = await supabase.rpc("offres_stats");
+    if (error || !data || data.length === 0) return;
+    const s = data[0];
+    setStats({
+      total: s.total,
+      fortes: s.fortes,
+      moyenne: s.moyenne,
+      documentsPrets: s.documents_prets,
+      nonNotees: s.non_notees,
+      envoyees: s.envoyees,
+      sources: s.sources ?? [],
+    });
+  }, [supabase]);
+
+  const chargerDetailOffre = useCallback(
+    async (id: string) => {
+      const { data, error } = await supabase
+        .from("offres")
+        .select("*, score:scores(*), candidature:candidatures(*)")
+        .eq("id", id)
+        .maybeSingle();
+      if (error || !data) {
+        setOffreDetail(null);
+        return;
+      }
+      setOffreDetail(data as unknown as OffreAvecDetails);
+    },
+    [supabase],
   );
+
+  useEffect(() => {
+    chargerPage();
+  }, [chargerPage]);
+
+  useEffect(() => {
+    chargerStats();
+  }, [chargerStats]);
+
+  useEffect(() => {
+    if (!offreSelectionneeId) {
+      setOffreDetail(null);
+      return;
+    }
+    chargerDetailOffre(offreSelectionneeId);
+  }, [offreSelectionneeId, chargerDetailOffre]);
+
+  const chargerCandidaturesSuivies = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("offres")
+      .select("*, candidatures!inner(*)")
+      .neq("candidatures.statut", "a_traiter")
+      .order("date_publication", { ascending: false });
+    if (error || !data) {
+      setCandidaturesSuivies([]);
+      return;
+    }
+    setCandidaturesSuivies(
+      data.map((row) => {
+        const { candidatures, ...offre } = row as unknown as Record<string, unknown> & {
+          candidatures: Candidature;
+        };
+        return { ...offre, score: null, candidature: candidatures } as OffreAvecDetails;
+      }),
+    );
+  }, [supabase]);
+
+  useEffect(() => {
+    if (suiviOuvert) chargerCandidaturesSuivies();
+  }, [suiviOuvert, chargerCandidaturesSuivies]);
+
+  async function rafraichirTout() {
+    await Promise.all([chargerPage(), chargerStats()]);
+    if (offreSelectionneeId) await chargerDetailOffre(offreSelectionneeId);
+    if (suiviOuvert) await chargerCandidaturesSuivies();
+  }
+
+  const sourcesDisponibles = useMemo(() => ["Toutes", ...stats.sources], [stats.sources]);
+
+  const nbPages = Math.max(1, Math.ceil(totalCount / TAILLE_PAGE));
 
   // Scroll déclenché après coup (useEffect, pas dans le handler de clic) :
   // le handler ne fait que changer `page`, et c'est seulement une fois que
@@ -132,59 +270,7 @@ export default function Dashboard({ offres }: Props) {
       return;
     }
     gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [pageActuelle]);
-
-  const nonNoteesCount = useMemo(
-    () => offresPertinentes.filter((o) => !o.score).length,
-    [offresPertinentes],
-  );
-
-  const envoyeesCount = useMemo(
-    () => offres.filter((o) => estEnvoyeeOuPlus(o.candidature?.statut)).length,
-    [offres],
-  );
-
-  const stats = useMemo(() => {
-    const total = offresPertinentes.length;
-    const fortes = offresPertinentes.filter((o) => (o.score?.score ?? 0) >= 70).length;
-    const scores = offresPertinentes
-      .map((o) => o.score?.score)
-      .filter((s): s is number => s != null);
-    const moyenne =
-      scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : 0;
-    const documentsPrets = offresPertinentes.filter(
-      (o) => o.candidature?.cv_genere_url || o.candidature?.lm_generee_url,
-    ).length;
-    return { total, fortes, moyenne, documentsPrets };
-  }, [offresPertinentes]);
-
-  const offreSelectionneeBrute = offres.find((o) => o.id === offreSelectionneeId) ?? null;
-  const offreSelectionnee = offreSelectionneeBrute
-    ? {
-        ...offreSelectionneeBrute,
-        description: descriptions[offreSelectionneeBrute.id] ?? offreSelectionneeBrute.description,
-      }
-    : null;
-
-  useEffect(() => {
-    if (!offreSelectionneeId || offreSelectionneeId in descriptions) return;
-    let annule = false;
-    fetch(`/api/offres/${offreSelectionneeId}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (!annule && data.offre) {
-          setDescriptions((prev) => ({ ...prev, [offreSelectionneeId]: data.offre.description }));
-        }
-      })
-      .catch(() => {});
-    return () => {
-      annule = true;
-    };
-  }, [offreSelectionneeId, descriptions]);
-
-  function rafraichir() {
-    startTransition(() => router.refresh());
-  }
+  }, [page]);
 
   async function appelerApi(url: string, body: unknown) {
     const res = await fetch(url, {
@@ -204,7 +290,7 @@ export default function Dashboard({ offres }: Props) {
     try {
       const data = await appelerApi("/api/documents/cv", { offre_id: offreId });
       setAvertissements(data.avertissements ?? []);
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la génération du CV");
     } finally {
@@ -219,7 +305,7 @@ export default function Dashboard({ offres }: Props) {
     try {
       const data = await appelerApi("/api/documents/lettre", { offre_id: offreId });
       setAvertissements(data.avertissements ?? []);
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la génération de la lettre");
     } finally {
@@ -234,7 +320,7 @@ export default function Dashboard({ offres }: Props) {
     try {
       const data = await appelerApi("/api/documents/message", { offre_id: offreId });
       setAvertissements(data.avertissements ?? []);
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la génération du message");
     } finally {
@@ -247,7 +333,7 @@ export default function Dashboard({ offres }: Props) {
     setActionEnCours({ offreId, type: "score" });
     try {
       await appelerApi("/api/scoring", { offre_id: offreId });
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors du scoring");
     } finally {
@@ -265,7 +351,7 @@ export default function Dashboard({ offres }: Props) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur");
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la mise à jour");
     }
@@ -279,7 +365,7 @@ export default function Dashboard({ offres }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de la suppression");
       setOffreSelectionneeId(null);
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la suppression");
     }
@@ -290,7 +376,7 @@ export default function Dashboard({ offres }: Props) {
     setSyncEnCours(true);
     try {
       await appelerApi("/api/offres/sync", {});
-      rafraichir();
+      await rafraichirTout();
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la synchronisation");
     } finally {
@@ -299,19 +385,15 @@ export default function Dashboard({ offres }: Props) {
   }
 
   async function deconnexion() {
-    const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
     router.refresh();
   }
 
-  const candidaturesSuivies = offres.filter((o) => estEnvoyeeOuPlus(o.candidature?.statut));
-
   return (
     <div className="wrap">
       <div className="top-row">
         <div>
-          {isPending && <p className="eyebrow">Actualisation...</p>}
           <h1 className="brand-title">Le Rayon</h1>
         </div>
         <div className="top-actions">
@@ -342,11 +424,11 @@ export default function Dashboard({ offres }: Props) {
           <span>Offres suivies</span>
         </div>
         <div className="stat">
-          <b style={{ color: couleurFortesCorrespondances(stats.fortes) }}>{stats.fortes}</b>
+          <b>{stats.fortes}</b>
           <span>Fortes correspondances</span>
         </div>
         <div className="stat">
-          <b style={{ color: couleurScoreMoyen(stats.moyenne) }}>{stats.moyenne}%</b>
+          <b>{stats.moyenne}%</b>
           <span>Score moyen</span>
         </div>
         <div className="stat">
@@ -360,8 +442,8 @@ export default function Dashboard({ offres }: Props) {
           className="search"
           type="text"
           placeholder="Rechercher un poste ou une entreprise…"
-          value={recherche}
-          onChange={(e) => setRecherche(e.target.value)}
+          value={rechercheInput}
+          onChange={(e) => setRechercheInput(e.target.value)}
         />
         <select value={tri} onChange={(e) => setTri(e.target.value as Tri)}>
           <option value="score-desc">Trier : score décroissant</option>
@@ -412,7 +494,7 @@ export default function Dashboard({ offres }: Props) {
             {(
               [
                 { valeur: "Toutes", libelle: "Notation : toutes" },
-                { valeur: "NonNotees", libelle: `Non notées (${nonNoteesCount})` },
+                { valeur: "NonNotees", libelle: `Non notées (${stats.nonNotees})` },
                 { valeur: "Notees", libelle: "Notées" },
               ] as const
             ).map(({ valeur, libelle }) => (
@@ -430,7 +512,7 @@ export default function Dashboard({ offres }: Props) {
             {(
               [
                 { valeur: "Toutes", libelle: "Statut : à traiter" },
-                { valeur: "Envoyees", libelle: `Envoyées (${envoyeesCount})` },
+                { valeur: "Envoyees", libelle: `Envoyées (${stats.envoyees})` },
               ] as const
             ).map(({ valeur, libelle }) => (
               <button
@@ -446,7 +528,7 @@ export default function Dashboard({ offres }: Props) {
         </div>
       </div>
 
-      {offresFiltrees.length === 0 ? (
+      {!chargementListe && offresPage.length === 0 ? (
         <div className="empty">Aucune offre ne correspond à ces filtres.</div>
       ) : (
         <>
@@ -470,13 +552,13 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => setPage(Math.max(1, pageActuelle - 1))}
-                disabled={pageActuelle === 1}
+                onClick={() => setPage(Math.max(1, page - 1))}
+                disabled={page === 1}
               >
                 ← Précédent
               </button>
               <div className="pagination-pages">
-                {calculerPagesAffichees(pageActuelle, nbPages).map((entree, i) =>
+                {calculerPagesAffichees(page, nbPages).map((entree, i) =>
                   entree === "…" ? (
                     <span key={`ellipsis-${i}`} className="pagination-ellipsis">
                       …
@@ -485,7 +567,7 @@ export default function Dashboard({ offres }: Props) {
                     <button
                       key={entree}
                       type="button"
-                      className={`chip ${entree === pageActuelle ? "active" : ""}`}
+                      className={`chip ${entree === page ? "active" : ""}`}
                       onClick={() => setPage(entree)}
                     >
                       {entree}
@@ -496,8 +578,8 @@ export default function Dashboard({ offres }: Props) {
               <button
                 type="button"
                 className="action-btn"
-                onClick={() => setPage(Math.min(nbPages, pageActuelle + 1))}
-                disabled={pageActuelle === nbPages}
+                onClick={() => setPage(Math.min(nbPages, page + 1))}
+                disabled={page === nbPages}
               >
                 Suivant →
               </button>
@@ -506,21 +588,21 @@ export default function Dashboard({ offres }: Props) {
         </>
       )}
 
-      {offreSelectionnee && (
+      {offreDetail && (
         <OfferPanel
-          offre={offreSelectionnee}
-          chargement={actionEnCours?.offreId === offreSelectionnee.id ? actionEnCours.type : null}
+          offre={offreDetail}
+          chargement={actionEnCours?.offreId === offreDetail.id ? actionEnCours.type : null}
           avertissements={avertissements}
           onFermer={() => {
             setOffreSelectionneeId(null);
             setAvertissements([]);
           }}
-          onGenererCv={() => genererCv(offreSelectionnee.id)}
-          onGenererLettre={() => genererLettre(offreSelectionnee.id)}
-          onGenererMessage={() => genererMessage(offreSelectionnee.id)}
-          onNoter={() => noterOffre(offreSelectionnee.id)}
-          onMarquerEnvoyee={() => marquerStatut(offreSelectionnee.id, "envoyee")}
-          onSupprimer={() => supprimerOffre(offreSelectionnee.id)}
+          onGenererCv={() => genererCv(offreDetail.id)}
+          onGenererLettre={() => genererLettre(offreDetail.id)}
+          onGenererMessage={() => genererMessage(offreDetail.id)}
+          onNoter={() => noterOffre(offreDetail.id)}
+          onMarquerEnvoyee={() => marquerStatut(offreDetail.id, "envoyee")}
+          onSupprimer={() => supprimerOffre(offreDetail.id)}
         />
       )}
 
@@ -537,7 +619,7 @@ export default function Dashboard({ offres }: Props) {
           onFermer={() => setModalAjoutOuvert(false)}
           onAjoutee={() => {
             setModalAjoutOuvert(false);
-            rafraichir();
+            rafraichirTout();
           }}
         />
       )}
