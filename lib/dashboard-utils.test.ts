@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   calculerPagesAffichees,
+  calculerStatsCandidatures,
   categorieContrat,
   couleurFortesCorrespondances,
   couleurScoreMoyen,
@@ -155,6 +156,42 @@ describe("calculerPagesAffichees", () => {
     const pages = calculerPagesAffichees(10, 20);
     expect(pages[0]).toBe(1);
     expect(pages[pages.length - 1]).toBe(20);
+  });
+});
+
+describe("calculerStatsCandidatures", () => {
+  const maintenant = new Date("2026-09-07T12:00:00Z");
+
+  it("tout à zéro sans candidature", () => {
+    expect(calculerStatsCandidatures([], maintenant)).toEqual({
+      total: 0,
+      envoyeesCeMois: 0,
+      tauxReponse: 0,
+      entretiens: 0,
+    });
+  });
+
+  it("compte les envois du mois courant et le taux de réponse", () => {
+    const offres = [
+      { candidature: { statut: "envoyee" as const, date_envoi: "2026-09-01" } }, // ce mois, pas de réponse
+      { candidature: { statut: "reponse_recue" as const, date_envoi: "2026-08-15" } }, // mois précédent, réponse
+      { candidature: { statut: "entretien" as const, date_envoi: "2026-09-05" } }, // ce mois, entretien
+      { candidature: { statut: "refusee" as const, date_envoi: "2026-07-01" } }, // réponse (refus)
+      { candidature: null }, // pas de candidature associée (ne doit pas planter)
+    ];
+    const stats = calculerStatsCandidatures(offres, maintenant);
+    expect(stats.total).toBe(5);
+    expect(stats.envoyeesCeMois).toBe(2);
+    expect(stats.entretiens).toBe(1);
+    // 3 réponses (reponse_recue, entretien, refusee) sur 5 lignes = 60%
+    expect(stats.tauxReponse).toBe(60);
+  });
+
+  it("le statut 'offre' compte comme réponse et comme entretien", () => {
+    const offres = [{ candidature: { statut: "offre" as const, date_envoi: "2026-09-02" } }];
+    const stats = calculerStatsCandidatures(offres, maintenant);
+    expect(stats.tauxReponse).toBe(100);
+    expect(stats.entretiens).toBe(1);
   });
 });
 

@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { OffreAvecDetails } from "@/types/dashboard";
 import {
+  calculerStatsCandidatures,
   libelleSource,
   libelleStatutCandidature,
   STATUTS_CANDIDATURE_ORDRE,
@@ -24,6 +25,8 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
   const lignes = [...offres].sort((a, b) =>
     (b.candidature?.date_envoi ?? "").localeCompare(a.candidature?.date_envoi ?? ""),
   );
+
+  const stats = useMemo(() => calculerStatsCandidatures(lignes, new Date()), [lignes]);
 
   function copierRecapitulatif() {
     const texte = lignes
@@ -83,6 +86,24 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
           </p>
         ) : (
           <>
+            <div className="stats tracker-stats">
+              <div className="stat">
+                <b>{stats.total}</b>
+                <span>Candidatures suivies</span>
+              </div>
+              <div className="stat">
+                <b>{stats.envoyeesCeMois}</b>
+                <span>Envoyées ce mois</span>
+              </div>
+              <div className="stat">
+                <b>{stats.tauxReponse}%</b>
+                <span>Taux de réponse</span>
+              </div>
+              <div className="stat">
+                <b>{stats.entretiens}</b>
+                <span>Entretiens</span>
+              </div>
+            </div>
             <div className="tracker-export-actions">
               <button type="button" className="btn btn-outline" onClick={copierRecapitulatif}>
                 {copie ? "Copié ✓" : "Copier le récapitulatif"}

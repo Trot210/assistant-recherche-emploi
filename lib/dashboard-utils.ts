@@ -173,6 +173,56 @@ export function calculerPagesAffichees(
   return resultat;
 }
 
+export interface StatsCandidatures {
+  total: number;
+  envoyeesCeMois: number;
+  tauxReponse: number;
+  entretiens: number;
+}
+
+interface OffreAvecCandidature {
+  candidature: { statut: CandidatureStatut; date_envoi: string | null } | null;
+}
+
+const STATUTS_REPONSE: CandidatureStatut[] = ["reponse_recue", "entretien", "refusee", "offre"];
+
+// Résumé chiffré affiché en tête du suivi des candidatures — `offres` est
+// déjà filtré en amont sur "envoyée ou plus" (voir estEnvoyeeOuPlus), donc
+// le taux de réponse rapporte les statuts au-delà de "envoyée" au total
+// suivi, pas à un total incluant les offres jamais envoyées.
+export function calculerStatsCandidatures(
+  offres: OffreAvecCandidature[],
+  maintenant: Date,
+): StatsCandidatures {
+  const total = offres.length;
+  const moisCourant = maintenant.getMonth();
+  const anneeCourante = maintenant.getFullYear();
+
+  let envoyeesCeMois = 0;
+  let reponses = 0;
+  let entretiens = 0;
+
+  for (const { candidature } of offres) {
+    if (!candidature) continue;
+    if (candidature.date_envoi) {
+      const d = new Date(candidature.date_envoi);
+      if (d.getMonth() === moisCourant && d.getFullYear() === anneeCourante) {
+        envoyeesCeMois++;
+      }
+    }
+    if (STATUTS_REPONSE.includes(candidature.statut)) {
+      reponses++;
+    }
+    if (candidature.statut === "entretien" || candidature.statut === "offre") {
+      entretiens++;
+    }
+  }
+
+  const tauxReponse = total > 0 ? Math.round((reponses / total) * 100) : 0;
+
+  return { total, envoyeesCeMois, tauxReponse, entretiens };
+}
+
 export function domaine(url: string): string {
   try {
     return new URL(url).hostname.replace(/^www\./, "");

@@ -579,6 +579,17 @@ select {
   color: var(--ink-soft);
   margin: 4px 0 18px;
 }
+/* Le modal est plus étroit que la grille principale : deux colonnes fixes
+   évitent le repli inégal (3 tuiles puis 1) que produirait le flex-wrap de
+   .stats à cette largeur. */
+.tracker-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+}
+.tracker-stats .stat {
+  min-width: 0;
+}
 .track-empty {
   font-size: 13.5px;
   color: var(--ink-soft);
