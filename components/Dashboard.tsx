@@ -15,6 +15,7 @@ import OfferCard from "./OfferCard";
 import OfferPanel from "./OfferPanel";
 import CandidatureTrackerModal from "./CandidatureTrackerModal";
 import AddOfferModal from "./AddOfferModal";
+import InsightsModal from "./InsightsModal";
 
 type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
 type Tri = "score-desc" | "score-asc" | "date-desc";
@@ -77,6 +78,7 @@ export default function Dashboard() {
   const [offreDetail, setOffreDetail] = useState<OffreAvecDetails | null>(null);
   const [modalAjoutOuvert, setModalAjoutOuvert] = useState(false);
   const [suiviOuvert, setSuiviOuvert] = useState(false);
+  const [insightsOuvert, setInsightsOuvert] = useState(false);
   const [candidaturesSuivies, setCandidaturesSuivies] = useState<OffreAvecDetails[]>([]);
   const [actionEnCours, setActionEnCours] = useState<ActionEnCours>(null);
   const [syncEnCours, setSyncEnCours] = useState(false);
@@ -406,6 +408,9 @@ export default function Dashboard() {
           <button className="action-btn" onClick={() => setSuiviOuvert(true)}>
             Suivi des candidatures
           </button>
+          <button className="action-btn" onClick={() => setInsightsOuvert(true)}>
+            Insights
+          </button>
           <button className="action-btn" onClick={deconnexion}>
             Déconnexion
           </button>
@@ -620,6 +625,16 @@ export default function Dashboard() {
           onAjoutee={() => {
             setModalAjoutOuvert(false);
             rafraichirTout();
+          }}
+        />
+      )}
+
+      {insightsOuvert && (
+        <InsightsModal
+          onFermer={() => setInsightsOuvert(false)}
+          onOuvrirOffre={(offreId) => {
+            setOffreSelectionneeId(offreId);
+            setAvertissements([]);
           }}
         />
       )}
