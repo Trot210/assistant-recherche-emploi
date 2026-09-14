@@ -4,8 +4,10 @@ import { useMemo, useState } from "react";
 import type { OffreAvecDetails } from "@/types/dashboard";
 import {
   calculerStatsCandidatures,
+  joursDepuisEnvoi,
   libelleSource,
   libelleStatutCandidature,
+  necessiteRelance,
   STATUTS_CANDIDATURE_ORDRE,
   type CandidatureStatut,
 } from "@/lib/dashboard-utils";
@@ -22,11 +24,17 @@ const STATUTS_SUIVI = STATUTS_CANDIDATURE_ORDRE.filter((s) => s !== "a_traiter")
 export default function CandidatureTrackerModal({ offres, onFermer, onChangerStatut }: Props) {
   const [copie, setCopie] = useState(false);
 
+  const maintenant = useMemo(() => new Date(), []);
+
   const lignes = [...offres].sort((a, b) =>
     (b.candidature?.date_envoi ?? "").localeCompare(a.candidature?.date_envoi ?? ""),
   );
 
-  const stats = useMemo(() => calculerStatsCandidatures(lignes, new Date()), [lignes]);
+  const stats = useMemo(() => calculerStatsCandidatures(lignes, maintenant), [lignes, maintenant]);
+  const nbARelancer = useMemo(
+    () => lignes.filter((o) => necessiteRelance(o.candidature, maintenant)).length,
+    [lignes, maintenant],
+  );
 
   function copierRecapitulatif() {
     const texte = lignes
@@ -86,6 +94,12 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
           </p>
         ) : (
           <>
+            {nbARelancer > 0 && (
+              <p className="tracker-relance-alerte">
+                {nbARelancer} candidature{nbARelancer > 1 ? "s" : ""} sans réponse depuis plus de 15
+                jours — pense à relancer.
+              </p>
+            )}
             <div className="stats tracker-stats">
               <div className="stat">
                 <b>{stats.total}</b>
@@ -113,30 +127,36 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
               </button>
             </div>
             <div className="candidature-list">
-              {lignes.map((o) => (
-                <div key={o.id} className="candidature-row">
-                  <div className="candidature-row-main">
-                    <p className="candidature-poste">{o.titre}</p>
-                    <p className="candidature-meta">
-                      {o.entreprise ?? "Entreprise non précisée"}
-                      {o.candidature?.date_envoi
-                        ? ` · Envoyée le ${new Date(o.candidature.date_envoi).toLocaleDateString("fr-FR")}`
-                        : ""}
-                    </p>
+              {lignes.map((o) => {
+                const relance = necessiteRelance(o.candidature, maintenant);
+                return (
+                  <div key={o.id} className={`candidature-row${relance ? " a-relancer" : ""}`}>
+                    <div className="candidature-row-main">
+                      <p className="candidature-poste">{o.titre}</p>
+                      <p className="candidature-meta">
+                        {o.entreprise ?? "Entreprise non précisée"}
+                        {o.candidature?.date_envoi
+                          ? ` · Envoyée le ${new Date(o.candidature.date_envoi).toLocaleDateString("fr-FR")}`
+                          : ""}
+                        {relance && o.candidature?.date_envoi
+                          ? ` · ⚠ ${joursDepuisEnvoi(o.candidature.date_envoi, maintenant)}j sans réponse`
+                          : ""}
+                      </p>
+                    </div>
+                    <select
+                      value={o.candidature?.statut ?? "envoyee"}
+                      onChange={(e) => onChangerStatut(o.id, e.target.value as CandidatureStatut)}
+                    >
+                      {STATUTS_SUIVI.map((s) => (
+                        <option key={s} value={s}>
+                          {libelleStatutCandidature(s)}
+                        </option>
+                      ))}
+                      <option value="a_traiter">Retirer du suivi</option>
+                    </select>
                   </div>
-                  <select
-                    value={o.candidature?.statut ?? "envoyee"}
-                    onChange={(e) => onChangerStatut(o.id, e.target.value as CandidatureStatut)}
-                  >
-                    {STATUTS_SUIVI.map((s) => (
-                      <option key={s} value={s}>
-                        {libelleStatutCandidature(s)}
-                      </option>
-                    ))}
-                    <option value="a_traiter">Retirer du suivi</option>
-                  </select>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </>
         )}

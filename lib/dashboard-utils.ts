@@ -184,6 +184,25 @@ interface OffreAvecCandidature {
   candidature: { statut: CandidatureStatut; date_envoi: string | null } | null;
 }
 
+export const SEUIL_RELANCE_JOURS = 15;
+
+export function joursDepuisEnvoi(dateEnvoi: string, maintenant: Date): number {
+  const debut = new Date(dateEnvoi);
+  const diffMs = maintenant.getTime() - debut.getTime();
+  return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+}
+
+// Une relance n'a de sens que tant qu'aucun signal n'est encore arrivé — dès
+// que le statut a bougé (réponse, entretien, refus, offre), le silence n'en
+// est plus un et ce n'est plus à "envoyée" de porter l'alerte.
+export function necessiteRelance(
+  candidature: { statut: CandidatureStatut; date_envoi: string | null } | null | undefined,
+  maintenant: Date,
+): boolean {
+  if (!candidature || candidature.statut !== "envoyee" || !candidature.date_envoi) return false;
+  return joursDepuisEnvoi(candidature.date_envoi, maintenant) >= SEUIL_RELANCE_JOURS;
+}
+
 const STATUTS_REPONSE: CandidatureStatut[] = ["reponse_recue", "entretien", "refusee", "offre"];
 
 // Résumé chiffré affiché en tête du suivi des candidatures — `offres` est

@@ -11,8 +11,10 @@ import {
   estAutomatique,
   estParisIntraMuros,
   estStageOuAlternance,
+  joursDepuisEnvoi,
   libelleSource,
   libelleTypeContrat,
+  necessiteRelance,
   paletteScore,
 } from "./dashboard-utils";
 
@@ -156,6 +158,35 @@ describe("calculerPagesAffichees", () => {
     const pages = calculerPagesAffichees(10, 20);
     expect(pages[0]).toBe(1);
     expect(pages[pages.length - 1]).toBe(20);
+  });
+});
+
+describe("joursDepuisEnvoi / necessiteRelance", () => {
+  const maintenant = new Date("2026-09-14T12:00:00Z");
+
+  it("compte les jours écoulés depuis l'envoi", () => {
+    expect(joursDepuisEnvoi("2026-09-14", maintenant)).toBe(0);
+    expect(joursDepuisEnvoi("2026-08-30", maintenant)).toBe(15);
+  });
+
+  it("ne signale pas de relance avant le seuil", () => {
+    expect(necessiteRelance({ statut: "envoyee", date_envoi: "2026-09-01" }, maintenant)).toBe(false);
+  });
+
+  it("signale une relance à partir du seuil (15 jours)", () => {
+    expect(necessiteRelance({ statut: "envoyee", date_envoi: "2026-08-30" }, maintenant)).toBe(true);
+    expect(necessiteRelance({ statut: "envoyee", date_envoi: "2026-08-20" }, maintenant)).toBe(true);
+  });
+
+  it("ne signale rien dès qu'un signal est arrivé (statut au-delà de 'envoyee')", () => {
+    expect(necessiteRelance({ statut: "reponse_recue", date_envoi: "2026-08-01" }, maintenant)).toBe(false);
+    expect(necessiteRelance({ statut: "entretien", date_envoi: "2026-08-01" }, maintenant)).toBe(false);
+    expect(necessiteRelance({ statut: "refusee", date_envoi: "2026-08-01" }, maintenant)).toBe(false);
+  });
+
+  it("ne signale rien sans candidature ou sans date d'envoi", () => {
+    expect(necessiteRelance(null, maintenant)).toBe(false);
+    expect(necessiteRelance({ statut: "envoyee", date_envoi: null }, maintenant)).toBe(false);
   });
 });
 
