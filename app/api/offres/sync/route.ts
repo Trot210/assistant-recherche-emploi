@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { searchOffres } from "@/lib/france-travail/client";
 import { TOUS_MOTS_CLES, TAILLE_LOT_MOTS_CLES, selectionnerLotMotsCles } from "@/lib/france-travail/motsCles";
 import { detecterStage, detecterAlternanceParTitre } from "@/lib/dashboard-utils";
+import { estOffreHorsCible } from "@/lib/france-travail/prefiltre";
 import type { OffreInsert } from "@/types/offre";
 
 // Chaque appel reste dans un budget de requêtes proche de l'historique
@@ -98,6 +99,7 @@ export async function POST(request: Request) {
 
   const offresParId = new Map<string, OffreInsert>();
   const erreurs: string[] = [];
+  const titresEcartes = new Map<string, string>();
 
   for (const departement of departements) {
     for (const motsCles of motsClesListe) {
@@ -112,6 +114,10 @@ export async function POST(request: Request) {
         });
 
         for (const offre of resultats) {
+          if (estOffreHorsCible(offre.intitule)) {
+            titresEcartes.set(offre.id, offre.intitule);
+            continue;
+          }
           offresParId.set(offre.id, {
             user_id: userId,
             titre: offre.intitule,
@@ -141,11 +147,17 @@ export async function POST(request: Request) {
   }
 
   const offres = Array.from(offresParId.values());
+  // Échantillon des titres écartés renvoyé dans la réponse : permet de
+  // repérer d'un coup d'œil un motif trop large qui écarterait à tort.
+  const ecartees = {
+    ecartees: titresEcartes.size,
+    echantillonEcartees: Array.from(titresEcartes.values()).slice(0, 10),
+  };
 
   if (offres.length === 0) {
     const purgees = await purgerOffresPerimees(supabase, userId);
     return NextResponse.json(
-      { inserted: 0, purgees, erreurs },
+      { inserted: 0, purgees, ...ecartees, erreurs },
       { status: erreurs.length > 0 ? 502 : 200 },
     );
   }
@@ -160,5 +172,5 @@ export async function POST(request: Request) {
 
   const purgees = await purgerOffresPerimees(supabase, userId);
 
-  return NextResponse.json({ synced: count ?? offres.length, purgees, erreurs });
+  return NextResponse.json({ synced: count ?? offres.length, purgees, ...ecartees, erreurs });
 }
