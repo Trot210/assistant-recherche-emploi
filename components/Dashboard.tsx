@@ -16,6 +16,8 @@ import OfferPanel from "./OfferPanel";
 import CandidatureTrackerModal from "./CandidatureTrackerModal";
 import AddOfferModal from "./AddOfferModal";
 import InsightsModal from "./InsightsModal";
+import NouvellesOffres from "./NouvellesOffres";
+import { lireFiltresSauvegardes, sauvegarderFiltres } from "@/lib/filtres-storage";
 
 type ActionEnCours = { offreId: string; type: "cv" | "lm" | "message" | "score" } | null;
 type Tri = "score-desc" | "score-asc" | "date-desc";
@@ -65,6 +67,12 @@ export default function Dashboard() {
   const [localisationFiltre, setLocalisationFiltre] = useState<FiltreLocalisation>("Toutes");
   const [notationFiltre, setNotationFiltre] = useState<FiltreNotation>("Toutes");
   const [statutFiltre, setStatutFiltre] = useState<FiltreStatut>("Toutes");
+  // Les filtres mémorisés ne sont lus qu'après le montage (localStorage
+  // n'existe pas côté serveur : les lire dans l'état initial créerait un
+  // écart d'hydratation). Tant que ce n'est pas fait, on ne charge ni ne
+  // sauvegarde rien, pour ne pas écraser les valeurs mémorisées par les
+  // défauts du premier rendu.
+  const [filtresPrets, setFiltresPrets] = useState(false);
   const [page, setPage] = useState(1);
   const gridRef = useRef<HTMLDivElement>(null);
   const premierRenduPage = useRef(true);
@@ -98,6 +106,29 @@ export default function Dashboard() {
   useEffect(() => {
     setPage(1);
   }, [recherche, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
+
+  useEffect(() => {
+    const f = lireFiltresSauvegardes(window.localStorage);
+    setSource(f.source);
+    setContrat(f.contrat as CategorieContrat | "Toutes");
+    setTri(f.tri as Tri);
+    setLocalisationFiltre(f.localisation as FiltreLocalisation);
+    setNotationFiltre(f.notation as FiltreNotation);
+    setStatutFiltre(f.statut as FiltreStatut);
+    setFiltresPrets(true);
+  }, []);
+
+  useEffect(() => {
+    if (!filtresPrets) return;
+    sauvegarderFiltres(window.localStorage, {
+      source,
+      contrat,
+      tri,
+      localisation: localisationFiltre,
+      notation: notationFiltre,
+      statut: statutFiltre,
+    });
+  }, [filtresPrets, source, contrat, tri, localisationFiltre, notationFiltre, statutFiltre]);
 
   const chargerPage = useCallback(async () => {
     setChargementListe(true);
@@ -169,6 +200,7 @@ export default function Dashboard() {
                 cv_genere_url: l.candidature_cv_genere_url,
                 lm_generee_url: l.candidature_lm_generee_url,
                 message_motivation: l.candidature_message_motivation,
+                notes: null,
                 created_at: l.created_at,
                 updated_at: l.created_at,
               },
@@ -209,8 +241,17 @@ export default function Dashboard() {
   );
 
   useEffect(() => {
-    chargerPage();
-  }, [chargerPage]);
+    if (filtresPrets) chargerPage();
+  }, [filtresPrets, chargerPage]);
+
+  // Une source mémorisée qui n'existe plus en base ne correspondrait à aucun
+  // bouton : on revient à "Toutes" plutôt que d'afficher une liste vide
+  // inexplicable.
+  useEffect(() => {
+    if (source !== "Toutes" && stats.sources.length > 0 && !stats.sources.includes(source)) {
+      setSource("Toutes");
+    }
+  }, [source, stats.sources]);
 
   useEffect(() => {
     chargerStats();
@@ -475,6 +516,8 @@ export default function Dashboard() {
           <span>Documents prêts</span>
         </div>
       </div>
+
+      <NouvellesOffres onOuvrirOffre={(offreId) => setOffreSelectionneeId(offreId)} />
 
       <div className="controls">
         <input

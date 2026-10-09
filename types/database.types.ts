@@ -161,6 +161,7 @@ export interface Database {
           cv_genere_url: string | null;
           lm_generee_url: string | null;
           message_motivation: string | null;
+          notes: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -173,6 +174,7 @@ export interface Database {
           cv_genere_url?: string | null;
           lm_generee_url?: string | null;
           message_motivation?: string | null;
+          notes?: string | null;
           created_at?: string;
           updated_at?: string;
         };

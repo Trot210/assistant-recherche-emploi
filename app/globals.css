@@ -124,6 +124,56 @@ h1 {
   color: var(--ink-soft);
 }
 
+/* nouvelles offres depuis la dernière visite */
+.nouvelles-offres {
+  border: 1px solid var(--emerald);
+  background: var(--card);
+  padding: 12px 16px;
+  margin-bottom: 20px;
+}
+.nouvelles-offres-tete {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.nouvelles-offres-titre {
+  margin: 0;
+  font-size: 13.5px;
+}
+.nouvelles-offres-titre b {
+  color: var(--emerald);
+}
+.nouvelles-offres-actions {
+  display: flex;
+  gap: 8px;
+}
+.nouvelles-offres-liste {
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.nouvelles-offres-ligne {
+  text-align: left;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--line-soft);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+}
+.nouvelles-offres-ligne:hover {
+  border-color: var(--navy);
+}
+.nouvelles-offres-suite {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
 /* controls */
 .controls {
   display: flex;
@@ -635,6 +685,7 @@ select {
 }
 .candidature-row {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 12px;
@@ -648,6 +699,55 @@ select {
 }
 .candidature-row-main {
   min-width: 0;
+  flex: 1;
+}
+.candidature-notes {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+}
+.candidature-notes-toggle {
+  font: inherit;
+  font-size: 12px;
+  color: var(--navy-soft);
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.candidature-notes-apercu {
+  font-size: 12px;
+  color: var(--ink-soft);
+  font-style: italic;
+  line-height: 1.5;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.candidature-notes-champ {
+  flex-basis: 100%;
+  min-height: 72px;
+  font: inherit;
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  resize: vertical;
+}
+.candidature-notes-etat {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-soft);
+  min-height: 14px;
+}
+.error-text-inline {
+  color: var(--brick);
 }
 .candidature-poste {
   font-size: 13.5px;

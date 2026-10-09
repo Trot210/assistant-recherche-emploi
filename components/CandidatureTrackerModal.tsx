@@ -21,6 +21,67 @@ interface Props {
 
 const STATUTS_SUIVI = STATUTS_CANDIDATURE_ORDRE.filter((s) => s !== "a_traiter") as CandidatureStatut[];
 
+type EtatSauvegarde = "inactif" | "enregistrement" | "enregistre" | "erreur";
+
+function NotesCandidature({ offreId, notesInitiales }: { offreId: string; notesInitiales: string | null }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [texte, setTexte] = useState(notesInitiales ?? "");
+  const [derniereSauvegarde, setDerniereSauvegarde] = useState(notesInitiales ?? "");
+  const [etat, setEtat] = useState<EtatSauvegarde>("inactif");
+  const [messageErreur, setMessageErreur] = useState<string | null>(null);
+
+  async function enregistrer() {
+    if (texte === derniereSauvegarde) return;
+    setEtat("enregistrement");
+    setMessageErreur(null);
+    try {
+      const res = await fetch("/api/candidatures/notes", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ offre_id: offreId, notes: texte }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'enregistrement");
+      setDerniereSauvegarde(texte);
+      setEtat("enregistre");
+    } catch (e) {
+      setMessageErreur(e instanceof Error ? e.message : "Erreur lors de l'enregistrement");
+      setEtat("erreur");
+    }
+  }
+
+  const apercu = texte.trim().split("\n")[0].slice(0, 70);
+
+  return (
+    <div className="candidature-notes">
+      <button type="button" className="candidature-notes-toggle" onClick={() => setOuvert((v) => !v)}>
+        {ouvert ? "Masquer les notes" : texte.trim() ? "Notes" : "+ Ajouter une note"}
+      </button>
+      {!ouvert && apercu && <span className="candidature-notes-apercu">{apercu}</span>}
+      {ouvert && (
+        <>
+          <textarea
+            className="candidature-notes-champ"
+            value={texte}
+            maxLength={2000}
+            placeholder="Recruteur, date de relance prévue, retour d'entretien…"
+            onChange={(e) => {
+              setTexte(e.target.value);
+              setEtat("inactif");
+            }}
+            onBlur={enregistrer}
+          />
+          <p className="candidature-notes-etat">
+            {etat === "enregistrement" && "Enregistrement…"}
+            {etat === "enregistre" && "Enregistré"}
+            {etat === "erreur" && <span className="error-text-inline">{messageErreur}</span>}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function CandidatureTrackerModal({ offres, onFermer, onChangerStatut }: Props) {
   const [copie, setCopie] = useState(false);
 
@@ -60,6 +121,7 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
       "Source",
       "Statut",
       "Lien de l'annonce",
+      "Notes",
     ]);
     const corps = lignes.map((o) =>
       versLigneCsv([
@@ -70,6 +132,7 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
         libelleSource(o.source),
         o.candidature ? libelleStatutCandidature(o.candidature.statut) : "",
         o.lien_original,
+        o.candidature?.notes ?? "",
       ]),
     );
     const date = new Date().toISOString().slice(0, 10);
@@ -154,6 +217,7 @@ export default function CandidatureTrackerModal({ offres, onFermer, onChangerSta
                       ))}
                       <option value="a_traiter">Retirer du suivi</option>
                     </select>
+                    <NotesCandidature offreId={o.id} notesInitiales={o.candidature?.notes ?? null} />
                   </div>
                 );
               })}
