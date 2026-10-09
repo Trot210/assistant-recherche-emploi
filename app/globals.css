@@ -76,6 +76,25 @@ h1 {
   letter-spacing: -0.01em;
   margin: 0 0 8px;
 }
+/* Le titre est un vrai <button> (navigable au clavier) qui hérite
+   entièrement de la typographie de .brand-title. */
+.brand-link {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.brand-link:hover {
+  color: var(--navy-soft);
+}
+.brand-link:focus-visible {
+  outline: 2px solid var(--navy);
+  outline-offset: 4px;
+}
 
 /* stat strip */
 .stats {

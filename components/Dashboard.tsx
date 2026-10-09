@@ -68,6 +68,7 @@ export default function Dashboard() {
   const [page, setPage] = useState(1);
   const gridRef = useRef<HTMLDivElement>(null);
   const premierRenduPage = useRef(true);
+  const ignorerScrollPage = useRef(false);
 
   const [offresPage, setOffresPage] = useState<OffreAvecDetails[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -271,8 +272,32 @@ export default function Dashboard() {
       premierRenduPage.current = false;
       return;
     }
+    if (ignorerScrollPage.current) {
+      ignorerScrollPage.current = false;
+      return;
+    }
     gridRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [page]);
+
+  // Retour au point de départ : filtres, recherche, tri et page par défaut,
+  // puis haut de page. Si on change de page à cette occasion, le scroll vers
+  // la grille (déclenché par le changement de `page`) est ignoré pour ne pas
+  // concurrencer le retour tout en haut.
+  function reinitialiserAccueil() {
+    if (page !== 1) ignorerScrollPage.current = true;
+    setRechercheInput("");
+    setRecherche("");
+    setSource("Toutes");
+    setContrat("Toutes");
+    setTri("score-desc");
+    setLocalisationFiltre("Toutes");
+    setNotationFiltre("Toutes");
+    setStatutFiltre("Toutes");
+    setPage(1);
+    setOffreSelectionneeId(null);
+    setAvertissements([]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
 
   async function appelerApi(url: string, body: unknown) {
     const res = await fetch(url, {
@@ -396,7 +421,16 @@ export default function Dashboard() {
     <div className="wrap">
       <div className="top-row">
         <div>
-          <h1 className="brand-title">Le Rayon</h1>
+          <h1 className="brand-title">
+            <button
+              type="button"
+              className="brand-link"
+              onClick={reinitialiserAccueil}
+              aria-label="Le Rayon — retour à l'accueil"
+            >
+              Le Rayon
+            </button>
+          </h1>
         </div>
         <div className="top-actions">
           <button className="action-btn" onClick={() => setModalAjoutOuvert(true)}>
