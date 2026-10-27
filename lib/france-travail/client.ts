@@ -7,6 +7,7 @@ const TOKEN_URL =
   "https://entreprise.francetravail.fr/connexion/oauth2/access_token?realm=%2Fpartenaire";
 const SEARCH_URL =
   "https://api.francetravail.io/partenaire/offresdemploi/v2/offres/search";
+const DETAIL_URL = "https://api.francetravail.io/partenaire/offresdemploi/v2/offres";
 const SCOPE = "api_offresdemploiv2 o2dsoffre";
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
@@ -105,4 +106,31 @@ export async function searchOffres(
   }
 
   return (await res.json()) as FranceTravailSearchResponse;
+}
+
+export type StatutOffre = "ouverte" | "cloturee" | "inconnue";
+
+// Interroge le détail d'une offre pour savoir si elle est toujours en ligne :
+// 200 = ouverte, 204 (sans corps) = clôturée/retirée — c'est exactement ce que
+// reflète la page publique ("offre clôturée"). Tout autre résultat (429, 5xx,
+// réseau) est "inconnue" : jamais une raison de supprimer une offre.
+export async function getStatutOffre(sourceId: string): Promise<StatutOffre> {
+  try {
+    const token = await getAccessToken();
+    for (let tentative = 0; tentative <= MAX_TENTATIVES_429; tentative++) {
+      const res = await fetch(`${DETAIL_URL}/${encodeURIComponent(sourceId)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.status === 200) {
+        await res.arrayBuffer();
+        return "ouverte";
+      }
+      if (res.status === 204) return "cloturee";
+      if (res.status !== 429) return "inconnue";
+      await attendre(1500 * (tentative + 1));
+    }
+  } catch {
+    // Réseau/authentification : on ne conclut rien.
+  }
+  return "inconnue";
 }

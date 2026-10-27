@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { searchOffres } from "@/lib/france-travail/client";
+import { searchOffres, getStatutOffre } from "@/lib/france-travail/client";
+import { fenetreVerification } from "@/lib/france-travail/verification";
 import { TOUS_MOTS_CLES, TAILLE_LOT_MOTS_CLES, selectionnerLotMotsCles } from "@/lib/france-travail/motsCles";
 import { detecterStage, detecterAlternanceParTitre } from "@/lib/dashboard-utils";
 import { estOffreHorsCible } from "@/lib/france-travail/prefiltre";
@@ -23,6 +24,81 @@ const DEPARTEMENTS_IDF = ["75", "77", "78", "91", "92", "93", "94", "95"];
 // liées à une candidature (jamais celles où tu as généré des documents ou
 // que tu as marquées) : elles restent, quel que soit leur âge.
 const RETENTION_JOURS = 45;
+
+const VINGT_MINUTES_MS = 20 * 60 * 1000;
+
+// Lot d'offres vérifiées à chaque synchro (voir lib/france-travail/
+// verification.ts) : ~40 appels × ~0,35 s, en plus des ~64 requêtes de
+// recherche, restent dans les 60 s de maxDuration grâce au budget ci-dessous.
+const TAILLE_LOT_VERIFICATION = 40;
+const BUDGET_TOTAL_MS = 50_000;
+const PAUSE_ENTRE_VERIFICATIONS_MS = 350;
+
+interface BilanVerification {
+  verifiees: number;
+  cloturees: number;
+  inconnues: number;
+}
+
+// Retire de la base les offres que France Travail a clôturées : leur lien
+// n'ouvre plus qu'une page "offre clôturée". Les offres liées à une
+// candidature sont conservées (c'est ta trace de ce que tu as envoyé), et une
+// réponse ambiguë de l'API (limite de débit, erreur serveur) n'est jamais
+// traitée comme une clôture.
+async function retirerOffresCloturees(
+  supabase: Awaited<ReturnType<typeof createAdminClient>> | Awaited<ReturnType<typeof createClient>>,
+  userId: string,
+  demarrage: number,
+): Promise<BilanVerification> {
+  const bilan: BilanVerification = { verifiees: 0, cloturees: 0, inconnues: 0 };
+
+  const { count } = await supabase
+    .from("offres")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .eq("source", "france_travail");
+
+  const fenetre = fenetreVerification(count ?? 0, TAILLE_LOT_VERIFICATION, Date.now(), VINGT_MINUTES_MS);
+  if (fenetre.fin < fenetre.debut) return bilan;
+
+  const { data: lot } = await supabase
+    .from("offres")
+    .select("id, source_id")
+    .eq("user_id", userId)
+    .eq("source", "france_travail")
+    .order("id")
+    .range(fenetre.debut, fenetre.fin);
+
+  const idsCloturees: string[] = [];
+  for (const offre of lot ?? []) {
+    if (Date.now() - demarrage > BUDGET_TOTAL_MS) break;
+    const statut = await getStatutOffre(offre.source_id);
+    bilan.verifiees += 1;
+    if (statut === "cloturee") idsCloturees.push(offre.id);
+    else if (statut === "inconnue") bilan.inconnues += 1;
+    await new Promise((resolve) => setTimeout(resolve, PAUSE_ENTRE_VERIFICATIONS_MS));
+  }
+
+  if (idsCloturees.length === 0) return bilan;
+
+  const { data: candidatures } = await supabase
+    .from("candidatures")
+    .select("offre_id")
+    .eq("user_id", userId)
+    .in("offre_id", idsCloturees);
+  const protegees = new Set((candidatures ?? []).map((c) => c.offre_id));
+  const aSupprimer = idsCloturees.filter((id) => !protegees.has(id));
+
+  if (aSupprimer.length > 0) {
+    const { count: supprimees } = await supabase
+      .from("offres")
+      .delete({ count: "exact" })
+      .eq("user_id", userId)
+      .in("id", aSupprimer);
+    bilan.cloturees = supprimees ?? 0;
+  }
+  return bilan;
+}
 
 async function purgerOffresPerimees(
   supabase: Awaited<ReturnType<typeof createAdminClient>> | Awaited<ReturnType<typeof createClient>>,
@@ -82,6 +158,7 @@ async function resolveAppelant(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const demarrage = Date.now();
   const appelant = await resolveAppelant(request);
 
   if ("error" in appelant) {
@@ -91,7 +168,6 @@ export async function POST(request: Request) {
   const { supabase, userId } = appelant;
 
   const body = await request.json().catch(() => ({}));
-  const VINGT_MINUTES_MS = 20 * 60 * 1000;
   const motsClesListe: string[] = body.motsCles
     ? [body.motsCles]
     : selectionnerLotMotsCles(TOUS_MOTS_CLES, TAILLE_LOT_MOTS_CLES, Date.now(), VINGT_MINUTES_MS);
@@ -154,10 +230,21 @@ export async function POST(request: Request) {
     echantillonEcartees: Array.from(titresEcartes.values()).slice(0, 10),
   };
 
+  // La vérification ne doit jamais faire échouer la synchro : une erreur ici
+  // est simplement signalée dans la réponse.
+  async function verifier(): Promise<BilanVerification & { erreur?: string }> {
+    try {
+      return await retirerOffresCloturees(supabase, userId, demarrage);
+    } catch (e) {
+      return { verifiees: 0, cloturees: 0, inconnues: 0, erreur: e instanceof Error ? e.message : "erreur inconnue" };
+    }
+  }
+
   if (offres.length === 0) {
+    const verification = await verifier();
     const purgees = await purgerOffresPerimees(supabase, userId);
     return NextResponse.json(
-      { inserted: 0, purgees, ...ecartees, erreurs },
+      { inserted: 0, purgees, verification, ...ecartees, erreurs },
       { status: erreurs.length > 0 ? 502 : 200 },
     );
   }
@@ -170,7 +257,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message, erreurs }, { status: 500 });
   }
 
+  const verification = await verifier();
   const purgees = await purgerOffresPerimees(supabase, userId);
 
-  return NextResponse.json({ synced: count ?? offres.length, purgees, ...ecartees, erreurs });
+  return NextResponse.json({ synced: count ?? offres.length, purgees, verification, ...ecartees, erreurs });
 }
