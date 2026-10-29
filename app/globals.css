@@ -1144,6 +1144,55 @@ select {
   cursor: pointer;
 }
 
+.prospection-croix {
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 2px 7px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--ink-soft);
+  opacity: 0.55;
+  cursor: pointer;
+}
+.prospection-croix:hover:not(:disabled),
+.prospection-croix:focus-visible {
+  opacity: 1;
+  color: var(--brick);
+}
+.prospection-croix:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+.prospection-confirmation {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--brick);
+  background: var(--brick-bg);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-start;
+}
+.prospection-confirmation p {
+  margin: 0;
+}
+.prospection-confirmation-choix {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.action-btn.danger {
+  border-color: var(--brick);
+  color: var(--brick);
+}
+.action-btn.danger:hover:not(:disabled) {
+  background: var(--brick);
+  color: #fff;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 34px;

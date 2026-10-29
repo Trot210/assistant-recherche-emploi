@@ -8,6 +8,13 @@ import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
 import type { EntrepriseStatut, Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import FicheEntreprise from "./FicheEntreprise";
+import Confirmation from "./Confirmation";
+import {
+  bilanEntreprise,
+  modesProposes,
+  texteSuppressionEntreprise,
+  type ModeSuppressionEntreprise,
+} from "@/lib/prospection/suppression";
 
 interface Props {
   userId: string;
@@ -15,6 +22,10 @@ interface Props {
   entreprise: Entreprise;
   contacts: ContactEntreprise[];
   nbMessages: number;
+  // Tous les messages de cette entreprise : ils déterminent ce que la suppression conserve.
+  messages: Prospection[];
+  onRetiree: (entreprise: Entreprise, idsSupprimes: string[]) => void;
+  onSupprimee: (entrepriseId: string, idsSupprimes: string[]) => void;
   onEntrepriseChange: (entreprise: Entreprise) => void;
   onContactAjoute: (contact: ContactEntreprise) => void;
   onContactSupprime: (contactId: string) => void;
@@ -36,6 +47,9 @@ export default function EntrepriseRow({
   entreprise,
   contacts,
   nbMessages,
+  messages,
+  onRetiree,
+  onSupprimee,
   onEntrepriseChange,
   onContactAjoute,
   onContactSupprime,
@@ -52,6 +66,11 @@ export default function EntrepriseRow({
   const [posteLibre, setPosteLibre] = useState("");
   const [contactId, setContactId] = useState("");
   const [redaction, setRedaction] = useState(false);
+  const [suppression, setSuppression] = useState<{ ouverte: boolean; enCours: boolean; erreur: string | null }>({
+    ouverte: false,
+    enCours: false,
+    erreur: null,
+  });
   const [langueChoix, setLangueChoix] = useState<"auto" | Langue>("auto");
   const [preparation, setPreparation] = useState<string | null>(null);
   const [analyse, setAnalyse] = useState(false);
@@ -71,6 +90,23 @@ export default function EntrepriseRow({
       return;
     }
     onEntrepriseChange(data);
+  }
+
+  async function supprimer(mode: ModeSuppressionEntreprise) {
+    setSuppression({ ouverte: true, enCours: true, erreur: null });
+    try {
+      const res = await fetch(`/api/prospection/entreprises/${entreprise.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la suppression");
+      if (mode === "supprimer") onSupprimee(entreprise.id, data.supprimes as string[]);
+      else onRetiree(data.entreprise as Entreprise, data.supprimes as string[]);
+    } catch (e) {
+      setSuppression({ ouverte: true, enCours: false, erreur: e instanceof Error ? e.message : "Erreur lors de la suppression" });
+    }
   }
 
   async function enregistrerSite() {
@@ -186,6 +222,8 @@ export default function EntrepriseRow({
     onContactAjoute(data);
   }
 
+  const bilan = bilanEntreprise(messages, contacts.length);
+  const modes = modesProposes(bilan, entreprise.statut);
   const contactChoisi = contacts.find((c) => c.id === contactId);
   const suggestionLangue = contactChoisi
     ? suggererLangueContact(contactChoisi)
@@ -313,8 +351,30 @@ export default function EntrepriseRow({
           <button className="action-btn" onClick={() => setOuvert((v) => !v)}>
             {ouvert ? "Fermer" : "Ouvrir"}
           </button>
+          <button
+            className="prospection-croix"
+            aria-label={`Retirer ${entreprise.nom}`}
+            title="Retirer ou supprimer cette entreprise"
+            onClick={() => setSuppression({ ouverte: true, enCours: false, erreur: null })}
+          >
+            ✕
+          </button>
         </div>
       </div>
+
+      {suppression.ouverte && (
+        <Confirmation
+          actions={modes.map((mode) => ({
+            libelle: mode === "retirer" ? "Retirer de la liste" : "Supprimer définitivement",
+            danger: mode === "supprimer",
+            explication: texteSuppressionEntreprise(entreprise.nom, bilan, mode),
+            onClick: () => supprimer(mode),
+          }))}
+          enCours={suppression.enCours}
+          erreur={suppression.erreur}
+          onAnnuler={() => setSuppression({ ouverte: false, enCours: false, erreur: null })}
+        />
+      )}
 
       {ouvert && (
         <div className="prospection-detail">

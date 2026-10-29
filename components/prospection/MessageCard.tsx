@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { libelleLangue } from "@/lib/prospection/langue";
+import { estEnvoye, peutSupprimerMessage, texteSuppressionMessage } from "@/lib/prospection/suppression";
+import Confirmation from "./Confirmation";
 import type { Langue, ProspectionStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 
@@ -21,6 +23,9 @@ interface Props {
   onChange: (prospection: Prospection) => void;
   // Une réponse ou une clôture peut modifier d'autres lignes du même fil.
   onFilModifie: () => void;
+  // Nombre de relances rattachées à ce message (supprimées avec lui).
+  nbRelances: number;
+  onSupprime: (ids: string[]) => void;
 }
 
 export const LIBELLES_STATUT_MESSAGE: Record<ProspectionStatut, string> = {
@@ -38,12 +43,28 @@ function formaterDate(dateIso: string | null): string {
   return `${jour}/${mois}/${annee}`;
 }
 
-export default function MessageCard({ cvs, smtpActif, prospection, entreprise, contact, gmailActif, onChange, onFilModifie }: Props) {
+export default function MessageCard({
+  cvs,
+  smtpActif,
+  prospection,
+  entreprise,
+  contact,
+  gmailActif,
+  onChange,
+  onFilModifie,
+  nbRelances,
+  onSupprime,
+}: Props) {
   const [ouvert, setOuvert] = useState(prospection.statut === "a_valider");
   const [objet, setObjet] = useState(prospection.objet);
   const [corps, setCorps] = useState(prospection.corps);
   const [joindreCv, setJoindreCv] = useState(true);
   const [confirme, setConfirme] = useState(false);
+  const [suppression, setSuppression] = useState<{ ouverte: boolean; enCours: boolean; erreur: string | null }>({
+    ouverte: false,
+    enCours: false,
+    erreur: null,
+  });
   const [action, setAction] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -118,6 +139,18 @@ export default function MessageCard({ cvs, smtpActif, prospection, entreprise, c
     );
   }
 
+  async function supprimer() {
+    setSuppression({ ouverte: true, enCours: true, erreur: null });
+    try {
+      const res = await fetch(`/api/prospection/${prospection.id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la suppression");
+      onSupprime(data.supprimes as string[]);
+    } catch (e) {
+      setSuppression({ ouverte: true, enCours: false, erreur: e instanceof Error ? e.message : "Erreur lors de la suppression" });
+    }
+  }
+
   async function copier() {
     try {
       await navigator.clipboard.writeText(`${prospection.objet}\n\n${prospection.corps}`);
@@ -131,6 +164,7 @@ export default function MessageCard({ cvs, smtpActif, prospection, entreprise, c
     ? `mailto:${contact.email}?subject=${encodeURIComponent(prospection.objet)}&body=${encodeURIComponent(prospection.corps)}`
     : null;
 
+  const autorisationSuppression = peutSupprimerMessage(prospection);
   const classeLigne =
     prospection.statut === "reponse_recue" ? "ok" : prospection.statut === "a_valider" ? "due" : "";
 
@@ -155,8 +189,32 @@ export default function MessageCard({ cvs, smtpActif, prospection, entreprise, c
           <button className="action-btn" onClick={() => setOuvert((v) => !v)}>
             {ouvert ? "Réduire" : "Voir"}
           </button>
+          <button
+            className="prospection-croix"
+            aria-label="Supprimer ce message"
+            title={autorisationSuppression.ok ? "Supprimer ce message" : autorisationSuppression.raison}
+            disabled={!autorisationSuppression.ok}
+            onClick={() => setSuppression({ ouverte: true, enCours: false, erreur: null })}
+          >
+            ✕
+          </button>
         </div>
       </div>
+
+      {suppression.ouverte && (
+        <Confirmation
+          texte={texteSuppressionMessage({
+            nomEntreprise: entreprise?.nom ?? "cette entreprise",
+            envoye: estEnvoye(prospection),
+            dateEnvoi: prospection.date_envoi ? formaterDate(prospection.date_envoi) : null,
+            nbRelances,
+          })}
+          actions={[{ libelle: "Supprimer définitivement", onClick: supprimer, danger: true }]}
+          enCours={suppression.enCours}
+          erreur={suppression.erreur}
+          onAnnuler={() => setSuppression({ ouverte: false, enCours: false, erreur: null })}
+        />
+      )}
 
       {ouvert && (
         <div className="prospection-detail">

@@ -34,6 +34,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const [prospections, setProspections] = useState<ProspectionRow[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
+  const [voirEcartees, setVoirEcartees] = useState(false);
   const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
   const [cvs, setCvs] = useState<Record<Langue, CvInfo | null>>({ fr: null, en: null });
 
@@ -66,6 +67,12 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   }, [charger, chargerCv]);
 
   const aujourdhui = aujourdhuiParis();
+  // Les entreprises « écartées » (retirées de la liste) restent en base pour
+  // garder l'historique de leurs messages, mais n'encombrent plus la liste ni
+  // les compteurs.
+  const entreprisesActives = useMemo(() => entreprises.filter((e) => e.statut !== "ecartee"), [entreprises]);
+  const entreprisesEcartees = useMemo(() => entreprises.filter((e) => e.statut === "ecartee"), [entreprises]);
+  const entreprisesAffichees = voirEcartees && entreprisesEcartees.length > 0 ? entreprisesEcartees : entreprisesActives;
   const entrepriseParId = useMemo(() => new Map(entreprises.map((e) => [e.id, e])), [entreprises]);
   const contactParId = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
 
@@ -74,14 +81,14 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
     const envoyes = initiaux.filter((p) => ["envoyee", "reponse_recue", "sans_suite"].includes(p.statut));
     const reponses = initiaux.filter((p) => p.statut === "reponse_recue");
     return {
-      entreprises: entreprises.length,
+      entreprises: entreprisesActives.length,
       aTraiter: prospections.filter((p) => estEnCours(p.statut)).length,
       envoyes: envoyes.length,
       reponses: reponses.length,
       taux: envoyes.length > 0 ? Math.round((reponses.length / envoyes.length) * 100) : null,
       relancesDues: initiaux.filter((p) => relanceDue(p, aujourdhui)).length,
     };
-  }, [prospections, entreprises, aujourdhui]);
+  }, [prospections, entreprisesActives, aujourdhui]);
 
   const messagesAffiches = prospections.filter((p) => {
     if (filtreMessages === "en_cours") return estEnCours(p.statut);
@@ -92,6 +99,21 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const relances = prospections
     .filter((p) => p.type === "initial" && p.statut === "envoyee" && p.prochaine_relance !== null)
     .sort((a, b) => (a.prochaine_relance! < b.prochaine_relance! ? -1 : 1));
+
+  function retirerMessages(ids: string[]) {
+    setProspections((l) => l.filter((p) => !ids.includes(p.id)));
+  }
+
+  function entrepriseSupprimee(entrepriseId: string, ids: string[]) {
+    setEntreprises((l) => l.filter((e) => e.id !== entrepriseId));
+    setContacts((l) => l.filter((c) => c.entreprise_id !== entrepriseId));
+    retirerMessages(ids);
+  }
+
+  function entrepriseRetiree(maj: Entreprise, ids: string[]) {
+    setEntreprises((l) => l.map((e) => (e.id === maj.id ? maj : e)));
+    retirerMessages(ids);
+  }
 
   function remplacerProspection(maj: ProspectionRow) {
     setProspections((liste) => liste.map((p) => (p.id === maj.id ? maj : p)));
@@ -176,7 +198,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
       <div className="prospection-tabs">
         {(
           [
-            ["entreprises", `Entreprises (${entreprises.length})`],
+            ["entreprises", `Entreprises (${entreprisesActives.length})`],
             ["messages", `Messages (${stats.aTraiter} en cours)`],
             ["relances", `Relances (${stats.relancesDues} dues)`],
           ] as [Onglet, string][]
@@ -196,13 +218,23 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             onImportees={(nouvelles) => setEntreprises((liste) => [...nouvelles, ...liste])}
           />
           <div className="prospection-liste">
-            {entreprises.length === 0 && (
+            {entreprisesEcartees.length > 0 && (
+              <div className="chip-row">
+                <button className={`chip${!voirEcartees ? " active" : ""}`} onClick={() => setVoirEcartees(false)}>
+                  Actives ({entreprisesActives.length})
+                </button>
+                <button className={`chip${voirEcartees ? " active" : ""}`} onClick={() => setVoirEcartees(true)}>
+                  Écartées ({entreprisesEcartees.length})
+                </button>
+              </div>
+            )}
+            {entreprisesAffichees.length === 0 && (
               <p className="track-empty">
                 Aucune entreprise pour l&apos;instant. Lance une recherche ci-dessus et importe celles qui
                 t&apos;intéressent.
               </p>
             )}
-            {entreprises.map((entreprise) => (
+            {entreprisesAffichees.map((entreprise) => (
               <EntrepriseRow
                 key={entreprise.id}
                 userId={userId}
@@ -210,6 +242,9 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                 entreprise={entreprise}
                 contacts={contacts.filter((c) => c.entreprise_id === entreprise.id)}
                 nbMessages={nbParEntreprise.get(entreprise.id) ?? 0}
+                messages={prospections.filter((p) => p.entreprise_id === entreprise.id)}
+                onRetiree={entrepriseRetiree}
+                onSupprimee={entrepriseSupprimee}
                 onEntrepriseChange={(maj) => setEntreprises((l) => l.map((e) => (e.id === maj.id ? maj : e)))}
                 onContactAjoute={(c) => setContacts((l) => [...l, c])}
                 onContactSupprime={(id) => setContacts((l) => l.filter((c) => c.id !== id))}
@@ -254,6 +289,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                 gmailActif={gmailActif}
                 onChange={remplacerProspection}
                 onFilModifie={charger}
+                nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
+                onSupprime={retirerMessages}
               />
             ))}
           </div>

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { peutSupprimerMessage } from "@/lib/prospection/suppression";
 import {
   appliquerAction,
   aujourdhuiParis,
@@ -124,4 +125,49 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
   return NextResponse.json({ prospection: misAJour });
+}
+
+// Supprime un seul message : ni l'entreprise ni ses contacts ne sont touchés.
+// Supprimer un message initial emporte aussi ses relances (elles n'ont de sens
+// que dans son fil) ; c'est annoncé dans la confirmation de l'interface.
+export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
+  }
+
+  const { data: prospection, error } = await supabase
+    .from("prospections")
+    .select("id, type, date_envoi")
+    .eq("id", id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!prospection) return NextResponse.json({ error: "Message introuvable" }, { status: 404 });
+
+  const autorisation = peutSupprimerMessage(prospection);
+  if (!autorisation.ok) return NextResponse.json({ error: autorisation.raison }, { status: 409 });
+
+  const { data: relances } = await supabase
+    .from("prospections")
+    .select("id")
+    .eq("parent_id", prospection.id)
+    .eq("user_id", user.id);
+
+  const { error: deleteError } = await supabase
+    .from("prospections")
+    .delete()
+    .eq("id", prospection.id)
+    .eq("user_id", user.id);
+
+  if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+
+  return NextResponse.json({ supprimes: [prospection.id, ...(relances ?? []).map((r) => r.id)] });
 }
