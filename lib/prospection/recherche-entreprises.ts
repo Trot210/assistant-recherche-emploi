@@ -26,9 +26,10 @@ export interface EntrepriseTrouvee {
 
 export interface ResultatRecherche {
   entreprises: EntrepriseTrouvee[];
-  total: number;
-  page: number;
-  totalPages: number;
+  // Page de l'API à demander pour poursuivre la recherche, ou null s'il n'y
+  // en a plus. Ce n'est pas un numéro de page « affiché » : une page de
+  // l'API peut ne contenir aucune entreprise au siège dans la zone.
+  pageSuivante: number | null;
 }
 
 const PAR_PAGE = 25;
@@ -89,7 +90,12 @@ function trancheOuNull(code: string | null | undefined): string | null {
   return code && code !== "NN" ? code : null;
 }
 
-export function normaliserReponse(reponse: ReponseApi): ResultatRecherche {
+export function normaliserReponse(reponse: ReponseApi): {
+  entreprises: EntrepriseTrouvee[];
+  total: number;
+  page: number;
+  totalPages: number;
+} {
   const entreprises = (reponse.results ?? []).map((r) => ({
     siren: r.siren,
     nom: r.nom_complet ?? r.nom_raison_sociale ?? r.siren,
@@ -109,15 +115,44 @@ export function normaliserReponse(reponse: ReponseApi): ResultatRecherche {
   };
 }
 
-export async function rechercherEntreprises(criteres: CriteresRecherche): Promise<ResultatRecherche> {
-  const res = await fetch(construireUrlRecherche(criteres), {
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
+// Le filtre « departement » de l'API retient toute entreprise qui a UN
+// établissement dans la zone (une chaîne de boulangeries du Nord avec une
+// boutique à Paris, par exemple). Pour viser un poste de siège (category,
+// trade marketing...), on ne garde que celles dont le SIÈGE est dans la zone.
+export function filtrerSiegeDansZone<T extends { departement: string | null }>(
+  entreprises: T[],
+  departements: string[],
+): T[] {
+  if (departements.length === 0) return entreprises;
+  return entreprises.filter((e) => e.departement !== null && departements.includes(e.departement));
+}
 
-  if (!res.ok) {
-    throw new Error(`Recherche d'entreprises indisponible (${res.status})`);
+// Comme le filtre de siège écarte une bonne part de chaque page de l'API, on
+// enchaîne quelques pages (bornées) jusqu'à remplir une page de résultats.
+const MAX_APPELS_API = 5;
+
+export async function rechercherEntreprises(criteres: CriteresRecherche): Promise<ResultatRecherche> {
+  const gardees: EntrepriseTrouvee[] = [];
+  let page = criteres.page ?? 1;
+  let totalPages = page;
+
+  for (let appel = 0; appel < MAX_APPELS_API && page <= totalPages; appel++) {
+    const res = await fetch(construireUrlRecherche({ ...criteres, page }), {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+
+    if (!res.ok) {
+      throw new Error(`Recherche d'entreprises indisponible (${res.status})`);
+    }
+
+    const resultat = normaliserReponse((await res.json()) as ReponseApi);
+    totalPages = resultat.totalPages;
+    gardees.push(...filtrerSiegeDansZone(resultat.entreprises, criteres.departements));
+    page++;
+
+    if (gardees.length >= PAR_PAGE) break;
   }
 
-  return normaliserReponse((await res.json()) as ReponseApi);
+  return { entreprises: gardees, pageSuivante: page <= totalPages ? page : null };
 }

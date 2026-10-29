@@ -24,9 +24,7 @@ interface EntrepriseTrouvee {
 
 interface Reponse {
   entreprises: EntrepriseTrouvee[];
-  total: number;
-  page: number;
-  totalPages: number;
+  pageSuivante: number | null;
 }
 
 interface Props {
@@ -48,7 +46,8 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
 
   const secteur = SECTEURS_CIBLES.find((s) => s.id === secteurId)!;
 
-  async function rechercher(page = 1) {
+  // ajouter = true : « Voir la suite » complète la liste au lieu de la remplacer.
+  async function rechercher(page = 1, ajouter = false) {
     setEnCours(true);
     setErreur(null);
     setInfo(null);
@@ -65,8 +64,16 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
       const res = await fetch(`/api/prospection/entreprises/recherche?${params}`);
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de la recherche");
-      setResultat(data);
-      setSelection(new Set());
+      if (ajouter && resultat) {
+        const dejaLa = new Set(resultat.entreprises.map((e) => e.siren));
+        setResultat({
+          entreprises: [...resultat.entreprises, ...data.entreprises.filter((e: EntrepriseTrouvee) => !dejaLa.has(e.siren))],
+          pageSuivante: data.pageSuivante,
+        });
+      } else {
+        setResultat(data);
+        setSelection(new Set());
+      }
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la recherche");
     } finally {
@@ -187,9 +194,15 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
       {resultat && (
         <div style={{ marginTop: 16 }}>
           <p className="prospection-meta">
-            {resultat.total} entreprise(s) trouvée(s) — page {resultat.page}/{resultat.totalPages}. Source :
-            base Sirene (données publiques).
+            {resultat.entreprises.length} entreprise(s) dont le siège est dans la zone choisie. Source : base
+            Sirene (données publiques).
           </p>
+          {resultat.entreprises.length === 0 && (
+            <p className="track-empty">
+              Aucune entreprise ne correspond{resultat.pageSuivante ? " dans cette tranche de résultats" : ""} — essaie
+              « Voir la suite », une autre zone ou une taille plus petite.
+            </p>
+          )}
           <div className="prospection-liste" style={{ marginTop: 10 }}>
             {resultat.entreprises.map((e) => (
               <label key={e.siren} className="prospection-ligne" style={{ cursor: e.deja_importee ? "default" : "pointer" }}>
@@ -216,20 +229,15 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
             <button className="action-btn primary" onClick={importer} disabled={enCours || selection.size === 0}>
               Importer la sélection ({selection.size})
             </button>
-            <button
-              className="action-btn"
-              onClick={() => rechercher(resultat.page - 1)}
-              disabled={enCours || resultat.page <= 1}
-            >
-              Page précédente
-            </button>
-            <button
-              className="action-btn"
-              onClick={() => rechercher(resultat.page + 1)}
-              disabled={enCours || resultat.page >= resultat.totalPages}
-            >
-              Page suivante
-            </button>
+            {resultat.pageSuivante !== null && (
+              <button
+                className="action-btn"
+                onClick={() => rechercher(resultat.pageSuivante!, true)}
+                disabled={enCours}
+              >
+                {enCours ? "Recherche..." : "Voir la suite"}
+              </button>
+            )}
           </div>
         </div>
       )}

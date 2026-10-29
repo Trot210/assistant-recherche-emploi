@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { construireUrlRecherche, normaliserReponse } from "@/lib/prospection/recherche-entreprises";
+import {
+  construireUrlRecherche,
+  filtrerSiegeDansZone,
+  normaliserReponse,
+} from "@/lib/prospection/recherche-entreprises";
 import { tranchesAPartirDe } from "@/lib/prospection/secteurs";
 
 describe("construireUrlRecherche", () => {
@@ -66,5 +70,25 @@ describe("normaliserReponse", () => {
 describe("tranchesAPartirDe", () => {
   it("renvoie une liste vide pour un seuil invalide", () => {
     expect(tranchesAPartirDe("ZZ")).toEqual([]);
+  });
+});
+
+describe("filtrerSiegeDansZone", () => {
+  const entreprises = [
+    { nom: "Paul", departement: "59" },
+    { nom: "Ladurée", departement: "75" },
+    { nom: "Cabosse", departement: "92" },
+    { nom: "Sans adresse", departement: null },
+  ];
+
+  it("écarte les entreprises dont le siège est hors de la zone", () => {
+    expect(filtrerSiegeDansZone(entreprises, ["75", "92", "93"]).map((e) => e.nom)).toEqual([
+      "Ladurée",
+      "Cabosse",
+    ]);
+  });
+
+  it("ne filtre rien quand aucune zone n'est demandée", () => {
+    expect(filtrerSiegeDansZone(entreprises, [])).toHaveLength(4);
   });
 });
