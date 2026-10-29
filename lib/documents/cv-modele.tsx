@@ -96,7 +96,7 @@ export async function rendreCv(cv: CvModele, photo?: Buffer): Promise<Buffer> {
   const doc = (
     <Document title={`${cv.nom} - CV`} author={cv.nom}>
       <Page size="A4" style={styles.page}>
-        <View style={styles.entete}>
+        <View style={photo ? styles.entete : [styles.entete, { minHeight: 0 }]}>
           <View style={styles.enteteTexte}>
             <Text style={styles.nom}>{cv.nom}</Text>
             <Text style={styles.titre}>{cv.titre}</Text>
