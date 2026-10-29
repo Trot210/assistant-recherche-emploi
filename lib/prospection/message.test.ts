@@ -19,6 +19,20 @@ describe("assemblerMessage", () => {
   });
 });
 
+describe("assemblerMessage en anglais", () => {
+  it("salue par le prénom et utilise la formule et la mention anglaises", () => {
+    const message = assemblerMessage({ corps: "Body", contactNom: "Anna Schmidt", candidat, langue: "en" });
+    expect(message.startsWith("Hello Anna,\n\n")).toBe(true);
+    expect(message).toContain("Kind regards,");
+    expect(message).toMatch(/delete your details\.$/);
+    expect(message).not.toContain("Cordialement");
+  });
+
+  it("reste neutre sans contact", () => {
+    expect(assemblerMessage({ corps: "Body", contactNom: null, candidat, langue: "en" }).startsWith("Hello,\n\n")).toBe(true);
+  });
+});
+
 describe("offrePourProspection", () => {
   it("ne décrit l'entreprise qu'avec des faits connus", () => {
     const entreprise = {

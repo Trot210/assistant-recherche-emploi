@@ -34,8 +34,12 @@ async function appeler<T>(chemin: string, params: Record<string, string>): Promi
   return (await res.json()) as T;
 }
 
-export async function rechercherEmailsDomaine(domaine: string): Promise<EmailHunter[]> {
-  const data = await appeler<{ data?: { emails?: EmailHunter[] } }>("/domain-search", {
+// Hunter donne le pays de l'ENTREPRISE (code à deux lettres), pas celui de
+// chaque personne : il sert d'indice pour choisir la langue du message.
+export async function rechercherEmailsDomaine(
+  domaine: string,
+): Promise<{ emails: EmailHunter[]; pays: string | null }> {
+  const data = await appeler<{ data?: { emails?: EmailHunter[]; country?: string | null } }>("/domain-search", {
     domain: domaine,
     limit: "10",
     type: "personal",
@@ -43,7 +47,7 @@ export async function rechercherEmailsDomaine(domaine: string): Promise<EmailHun
     // demande dans les services utiles plutôt que parmi les dirigeants.
     department: "marketing,sales,hr",
   });
-  return data.data?.emails ?? [];
+  return { emails: data.data?.emails ?? [], pays: data.data?.country ?? null };
 }
 
 export async function quotaHunter(): Promise<{ utilisees: number; disponibles: number } | null> {

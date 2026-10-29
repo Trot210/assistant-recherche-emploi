@@ -1,10 +1,19 @@
 "use client";
 
 import { useState } from "react";
+import { libelleLangue } from "@/lib/prospection/langue";
 import type { ProspectionStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 
+export interface CvInfo {
+  nomFichier: string;
+  taille: number | null;
+  url: string | null;
+}
+
 interface Props {
+  cv: CvInfo | null;
+  smtpActif: boolean;
   prospection: Prospection;
   entreprise: Entreprise | undefined;
   contact: ContactEntreprise | undefined;
@@ -29,11 +38,12 @@ function formaterDate(dateIso: string | null): string {
   return `${jour}/${mois}/${annee}`;
 }
 
-export default function MessageCard({ prospection, entreprise, contact, gmailActif, onChange, onFilModifie }: Props) {
+export default function MessageCard({ cv, smtpActif, prospection, entreprise, contact, gmailActif, onChange, onFilModifie }: Props) {
   const [ouvert, setOuvert] = useState(prospection.statut === "a_valider");
   const [objet, setObjet] = useState(prospection.objet);
   const [corps, setCorps] = useState(prospection.corps);
-  const [joindreCv, setJoindreCv] = useState(prospection.type === "initial");
+  const [joindreCv, setJoindreCv] = useState(true);
+  const [confirme, setConfirme] = useState(false);
   const [action, setAction] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -92,6 +102,20 @@ export default function MessageCard({ prospection, entreprise, contact, gmailAct
     if (typeof data.lien_brouillon === "string") window.open(data.lien_brouillon, "_blank", "noopener");
   }
 
+  async function envoyer() {
+    const data = await appeler("envoi", `/api/prospection/${prospection.id}/envoyer`, {
+      method: "POST",
+      body: JSON.stringify({ confirme: true, joindre_cv: joindreCv }),
+    });
+    if (!data) return;
+    onChange(data.prospection as Prospection);
+    onFilModifie();
+    setConfirme(false);
+    setInfo(
+      `Message envoyé à ${contact?.email}${data.piece_jointe ? ` avec ${data.piece_jointe} en pièce jointe` : " (sans pièce jointe)"}.`,
+    );
+  }
+
   async function copier() {
     try {
       await navigator.clipboard.writeText(`${prospection.objet}\n\n${prospection.corps}`);
@@ -124,6 +148,7 @@ export default function MessageCard({ prospection, entreprise, contact, gmailAct
           </div>
         </div>
         <div className="prospection-actions">
+          <span className="status-pill">{libelleLangue(prospection.langue)}</span>
           <span className="status-pill">{LIBELLES_STATUT_MESSAGE[prospection.statut]}</span>
           <button className="action-btn" onClick={() => setOuvert((v) => !v)}>
             {ouvert ? "Réduire" : "Voir"}
@@ -165,6 +190,57 @@ export default function MessageCard({ prospection, entreprise, contact, gmailAct
             </p>
           )}
 
+          {smtpActif && (prospection.statut === "valide" || prospection.statut === "brouillon_gmail") && !modifie && (
+            <div className="prospection-bloc" style={{ marginBottom: 0, background: "var(--paper)" }}>
+              <h3>Vérification avant envoi</h3>
+              <ul style={{ margin: "0 0 12px", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>
+                <li>
+                  <b>À :</b>{" "}
+                  {contact?.email ? `${contact.nom} <${contact.email}>` : "aucun destinataire avec une adresse e-mail"}
+                </li>
+                <li>
+                  <b>Objet :</b> {prospection.objet}
+                </li>
+                <li>
+                  <b>Langue :</b> {libelleLangue(prospection.langue)}
+                </li>
+                <li>
+                  <b>Pièce jointe :</b>{" "}
+                  {!joindreCv ? (
+                    "aucune"
+                  ) : cv ? (
+                    <>
+                      {cv.nomFichier}
+                      {cv.taille ? ` (${Math.round(cv.taille / 1024)} Ko)` : ""}{" "}
+                      {cv.url && (
+                        <a href={cv.url} target="_blank" rel="noopener noreferrer">
+                          ouvrir pour vérifier
+                        </a>
+                      )}
+                    </>
+                  ) : (
+                    <span className="prospection-erreur">aucun CV enregistré — ajoute-le en haut de la page</span>
+                  )}
+                </li>
+              </ul>
+              <label style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <input type="checkbox" checked={joindreCv} onChange={(e) => setJoindreCv(e.target.checked)} />
+                Joindre mon CV
+              </label>
+              <label style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 12 }}>
+                <input type="checkbox" checked={confirme} onChange={(e) => setConfirme(e.target.checked)} />
+                J&apos;ai vérifié le destinataire, le texte et la pièce jointe
+              </label>
+              <button
+                className="action-btn primary"
+                onClick={envoyer}
+                disabled={action !== null || !confirme || !contact?.email || (joindreCv && !cv)}
+              >
+                {action === "envoi" ? "Envoi en cours..." : "Envoyer maintenant"}
+              </button>
+            </div>
+          )}
+
           <div className="prospection-actions">
             {modifiable && modifie && (
               <button className="action-btn primary" onClick={enregistrer} disabled={action !== null}>
@@ -190,10 +266,7 @@ export default function MessageCard({ prospection, entreprise, contact, gmailAct
                     >
                       {action === "brouillon" ? "Création du brouillon..." : "Créer le brouillon Gmail"}
                     </button>
-                    <label style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      <input type="checkbox" checked={joindreCv} onChange={(e) => setJoindreCv(e.target.checked)} />
-                      Joindre un CV adapté
-                    </label>
+
                   </>
                 )}
                 <button className="action-btn" onClick={copier}>
@@ -238,8 +311,9 @@ export default function MessageCard({ prospection, entreprise, contact, gmailAct
 
           {!gmailActif && prospection.statut === "valide" && (
             <p className="prospection-meta">
-              Gmail n&apos;est pas configuré : copie le message ou ouvre-le dans ta messagerie (voir .env.example
-              pour activer les brouillons Gmail).
+              {smtpActif
+                ? "Tu peux aussi copier le message ou l'ouvrir dans ta messagerie."
+                : "L'envoi n'est pas configuré : copie le message ou ouvre-le dans ta messagerie (voir .env.example pour activer l'envoi depuis la plateforme)."}
             </p>
           )}
           {info && <p className="prospection-info">{info}</p>}

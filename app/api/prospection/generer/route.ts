@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { genererMessageSpontane, genererRelance } from "@/lib/anthropic/prospection";
 import { estEnCours, MAX_RELANCES } from "@/lib/prospection/workflow";
+import { suggererLangueContact } from "@/lib/prospection/langue";
+import type { Langue } from "@/types/database.types";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
@@ -92,6 +94,7 @@ export async function POST(request: Request) {
           parent_id: initial.id,
           type: "relance",
           poste_vise: initial.poste_vise,
+          langue: initial.langue,
           gmail_thread_id: initial.gmail_thread_id,
           ...genere,
         })
@@ -133,11 +136,22 @@ export async function POST(request: Request) {
       contact = data;
     }
 
+    // Langue : choix explicite de la requête, sinon celle suggérée pour le
+    // contact (pays, extension de l'adresse), sinon le français.
+    const demandee: unknown = body?.langue;
+    const langue: Langue =
+      demandee === "fr" || demandee === "en"
+        ? demandee
+        : contact
+          ? suggererLangueContact(contact).langue
+          : "fr";
+
     const genere = await genererMessageSpontane({
       profil,
       entreprise,
       contact,
       posteVise: posteVise.trim(),
+      langue,
     });
 
     const { data: prospection, error: insertError } = await supabase
@@ -147,6 +161,7 @@ export async function POST(request: Request) {
         entreprise_id: entreprise.id,
         contact_id: contact?.id ?? null,
         poste_vise: posteVise.trim(),
+        langue,
         ...genere,
       })
       .select()

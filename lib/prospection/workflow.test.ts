@@ -24,6 +24,8 @@ function prospection(surcharge: Partial<Prospection> = {}): Prospection {
     gmail_draft_id: null,
     gmail_message_id: null,
     gmail_thread_id: null,
+    langue: "fr",
+    smtp_message_id: null,
     date_envoi: null,
     nb_relances: 0,
     prochaine_relance: null,

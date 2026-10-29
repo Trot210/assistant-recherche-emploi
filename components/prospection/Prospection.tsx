@@ -7,7 +7,8 @@ import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workf
 import type { ContactEntreprise, Entreprise, Prospection as ProspectionRow } from "@/types/prospection";
 import RechercheEntreprises from "./RechercheEntreprises";
 import EntrepriseRow from "./EntrepriseRow";
-import MessageCard from "./MessageCard";
+import MessageCard, { type CvInfo } from "./MessageCard";
+import CvReference from "./CvReference";
 
 type Onglet = "entreprises" | "messages" | "relances";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
@@ -16,13 +17,14 @@ interface Props {
   userId: string;
   gmailActif: boolean;
   hunterActif: boolean;
+  smtpActif: boolean;
 }
 
 // Les listes ci-dessous sont chargées en entier : ce volet gère quelques
 // dizaines à quelques centaines d'entreprises ciblées à la main, loin des
 // 1000 lignes que PostgREST renvoie par défaut. Si l'import devait
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
-export default function Prospection({ userId, gmailActif, hunterActif }: Props) {
+export default function Prospection({ userId, gmailActif, hunterActif, smtpActif }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [onglet, setOnglet] = useState<Onglet>("entreprises");
   const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>("en_cours");
@@ -32,6 +34,7 @@ export default function Prospection({ userId, gmailActif, hunterActif }: Props) 
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
+  const [cv, setCv] = useState<CvInfo | null>(null);
 
   const charger = useCallback(async () => {
     const [e, c, p] = await Promise.all([
@@ -50,9 +53,16 @@ export default function Prospection({ userId, gmailActif, hunterActif }: Props) 
     setChargement(false);
   }, [supabase]);
 
+  const chargerCv = useCallback(async () => {
+    const res = await fetch("/api/profil/cv");
+    const data = await res.json().catch(() => ({}));
+    setCv(res.ok ? (data.cv ?? null) : null);
+  }, []);
+
   useEffect(() => {
     charger();
-  }, [charger]);
+    chargerCv();
+  }, [charger, chargerCv]);
 
   const aujourdhui = aujourdhuiParis();
   const entrepriseParId = useMemo(() => new Map(entreprises.map((e) => [e.id, e])), [entreprises]);
@@ -160,6 +170,8 @@ export default function Prospection({ userId, gmailActif, hunterActif }: Props) 
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
 
+      <CvReference cv={cv} onChange={chargerCv} />
+
       <div className="prospection-tabs">
         {(
           [
@@ -233,6 +245,8 @@ export default function Prospection({ userId, gmailActif, hunterActif }: Props) 
             {messagesAffiches.map((p) => (
               <MessageCard
                 key={p.id}
+                cv={cv}
+                smtpActif={smtpActif}
                 prospection={p}
                 entreprise={entrepriseParId.get(p.entreprise_id)}
                 contact={p.contact_id ? contactParId.get(p.contact_id) : undefined}

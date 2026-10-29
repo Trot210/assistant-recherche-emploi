@@ -1,4 +1,4 @@
-import type { Contact as ContactCandidat } from "@/types/database.types";
+import type { Contact as ContactCandidat, Langue } from "@/types/database.types";
 import type { Entreprise } from "@/types/prospection";
 import type { Offre } from "@/types/offre";
 import { libelleTranche } from "@/lib/prospection/secteurs";
@@ -8,20 +8,44 @@ import { resumerFiche } from "@/lib/prospection/fiche";
 // mention de désinscription sont ajoutées par l'application : elles viennent
 // du profil et de la fiche contact, jamais du modèle (même principe que
 // pour le nom sur la lettre de motivation).
-const MENTION_DESINSCRIPTION =
-  "Si vous préférez que je ne vous recontacte pas, dites-le-moi simplement et je supprimerai vos coordonnées.";
+const TEXTES: Record<Langue, { cordialement: string; desinscription: string }> = {
+  fr: {
+    cordialement: "Cordialement,",
+    desinscription: "Si vous préférez que je ne vous recontacte pas, un mot suffit et je supprimerai vos coordonnées.",
+  },
+  en: {
+    cordialement: "Kind regards,",
+    desinscription: "If you'd rather I didn't contact you again, just let me know and I will delete your details.",
+  },
+};
+
+function formuleAppel(contactNom: string | null | undefined, langue: Langue): string {
+  const nom = contactNom?.trim();
+  if (langue === "en") {
+    // En anglais professionnel, on s'adresse à la personne par son prénom.
+    return nom ? `Hello ${nom.split(/\s+/)[0]},` : "Hello,";
+  }
+  return nom ? `Bonjour ${nom},` : "Bonjour,";
+}
 
 export function assemblerMessage(params: {
   corps: string;
   contactNom?: string | null;
   candidat: ContactCandidat;
+  langue?: Langue;
 }): string {
-  const appel = params.contactNom?.trim() ? `Bonjour ${params.contactNom.trim()},` : "Bonjour,";
+  const langue = params.langue ?? "fr";
   const signature = [params.candidat.nom, params.candidat.telephone, params.candidat.email]
     .filter((ligne): ligne is string => Boolean(ligne))
     .join("\n");
 
-  return [appel, params.corps.trim(), "Cordialement,", signature, MENTION_DESINSCRIPTION]
+  return [
+    formuleAppel(params.contactNom, langue),
+    params.corps.trim(),
+    TEXTES[langue].cordialement,
+    signature,
+    TEXTES[langue].desinscription,
+  ]
     .filter(Boolean)
     .join("\n\n");
 }

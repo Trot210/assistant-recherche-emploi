@@ -3,29 +3,35 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic } from "@/lib/anthropic/client";
 import { nettoyerMarkdown, tronquer, verifierFidelite } from "@/lib/anthropic/documents";
 import { assemblerMessage, offrePourProspection } from "@/lib/prospection/message";
-import type { Profil } from "@/types/profil";
 import { resumerFiche } from "@/lib/prospection/fiche";
+import { aujourdhuiParis } from "@/lib/prospection/workflow";
+import type { Langue } from "@/types/database.types";
+import type { Profil } from "@/types/profil";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 
 // Les messages spontanés sont courts et nombreux : le modèle Sonnet (moins
 // cher que celui des CV et lettres) suffit pour les rédiger et les contrôler.
 const MODELE = "claude-sonnet-5-5";
 
-const MAX_CORPS_INITIAL = 1000;
-const MAX_CORPS_RELANCE = 550;
-const MAX_OBJET = 90;
+// Un destinataire doit comprendre en cinq secondes : le CV est en pièce jointe,
+// le message ne sert qu'à donner envie de l'ouvrir.
+const MAX_CORPS_INITIAL = 650;
+const MAX_CORPS_RELANCE = 380;
+const MAX_OBJET = 70;
+
+const NOM_LANGUE: Record<Langue, string> = { fr: "français", en: "anglais" };
 
 const MessageSchema = z.object({
-  objet: z.string().describe(`Objet de l'e-mail, ${MAX_OBJET} caractères maximum, concret, sans majuscules criardes`),
+  objet: z.string().describe(`Objet de l'e-mail, ${MAX_OBJET} caractères maximum, concret : le poste visé, sans majuscules criardes`),
   corps: z
     .string()
-    .describe(
-      "Cœur du message uniquement : sans formule d'appel, sans formule de politesse finale, sans signature",
-    ),
+    .describe("Cœur du message uniquement : sans formule d'appel, sans formule de politesse finale, sans signature"),
 });
 
 function profilPourPrompt(profil: Profil): string {
-  return `Profil du candidat (SOURCE UNIQUE ET OFFICIELLE sur le candidat — n'utilise aucune autre information) :
+  return `Date du jour : ${aujourdhuiParis()}.
+
+Profil du candidat (SOURCE UNIQUE ET OFFICIELLE sur le candidat — n'utilise aucune autre information) :
 Compétences : ${profil.competences.length > 0 ? profil.competences.join(", ") : "non renseignées"}
 Expériences : ${profil.experiences.length > 0 ? JSON.stringify(profil.experiences) : "non renseignées"}
 Formation : ${JSON.stringify(profil.formation)}
@@ -47,12 +53,17 @@ ${fiche ? `Fiche issue de sources publiques :\n${fiche}\n` : ""}Accroche fournie
 Destinataire : ${contact && !contact.generique ? `${contact.nom}${contact.poste ? `, ${contact.poste}` : ""}` : "adresse générique de l'entreprise"}`;
 }
 
-const REGLES_COMMUNES = `Règle absolue — aucune invention :
-- Sur le candidat : uniquement des faits présents dans son profil. Pas de durée d'expérience calculée, pas de chiffre, d'outil, de diplôme ou de responsabilité de management absents du profil.
-- Sur l'entreprise : uniquement les informations listées sous « Ce que l'on SAIT de l'entreprise ». N'invente aucun produit, lancement, chiffre, valeur d'entreprise ni actualité. Quand une fiche est fournie, appuie-toi sur un ou deux de ses éléments (une marque, un enjeu, une actualité) qui rencontrent réellement le profil du candidat, sans les énumérer. Sans fiche ni accroche, ne prétends pas connaître l'entreprise de près : reste sur le secteur et le poste visé.
-- Mets en avant les expériences du profil les plus pertinentes pour CE poste dans CETTE entreprise (expérience en enseigne pour un distributeur, côté industriel pour un fabricant).
+function reglesCommunes(langue: Langue): string {
+  return `Langue : écris l'objet et le message en ${NOM_LANGUE[langue]}, dans un registre professionnel naturel, comme le ferait un locuteur natif.
 
-Ton : direct, professionnel, humain — jamais de formule creuse (« passionné par votre secteur », « profil qui correspond parfaitement »). Chaque phrase apporte un fait ou une demande précise. Texte brut uniquement, sans markdown, sans liste à puces.`;
+Règle absolue — aucune invention :
+- Sur le candidat : uniquement des faits présents dans son profil. Pas de durée d'expérience calculée, pas de chiffre, d'outil, de diplôme ou de responsabilité de management absents du profil.
+- Sur l'entreprise : uniquement les informations listées sous « Ce que l'on SAIT de l'entreprise ». N'invente aucun produit, lancement, chiffre ni actualité. Sans fiche ni accroche, ne prétends pas connaître l'entreprise de près : reste sur le secteur et le poste visé.
+
+Temps des verbes : une expérience dont la date de fin est antérieure à la date du jour est TERMINÉE et se raconte au passé (« j'ai occupé », « I worked as »), jamais au présent. Le candidat n'est actuellement en poste dans aucune expérience terminée : il est en recherche.
+
+Le CV est joint au message : ne le retranscris pas et ne résume pas le parcours. Pas de liste, pas d'énumération de compétences, pas d'adjectifs creux (« passionné », « motivé », « dynamique »), pas de formule d'excuse ni de remerciement d'avance. Texte brut, sans markdown.`;
+}
 
 async function rediger(system: string, user: string) {
   const response = await anthropic.messages.parse({
@@ -82,15 +93,19 @@ export async function genererMessageSpontane(params: {
   entreprise: Entreprise;
   contact: ContactEntreprise | null;
   posteVise: string;
+  langue: Langue;
 }): Promise<MessageGenere> {
-  const { profil, entreprise, contact, posteVise } = params;
+  const { profil, entreprise, contact, posteVise, langue } = params;
 
   const genere = await rediger(
-    `Tu rédiges un e-mail de candidature spontanée en français, court et personnalisé, pour un candidat qui vise un poste précis dans une entreprise qui n'a publié aucune offre.
+    `Tu rédiges un e-mail de candidature spontanée très court. Le destinataire doit comprendre en cinq secondes qui écrit, ce qu'il cherche, pourquoi à cette entreprise, et ce qu'il propose.
 
-${REGLES_COMMUNES}
+${reglesCommunes(langue)}
 
-Structure : (1) une phrase qui dit pourquoi tu écris et quel poste est visé ; (2) deux ou trois faits réels du profil, choisis parce qu'ils servent CE poste dans CE secteur ; (3) une demande claire et modeste (un échange court ou l'orientation vers la bonne personne), et la mention que le CV est en pièce jointe. ${MAX_CORPS_INITIAL} caractères maximum pour le corps.`,
+Structure en quatre phrases au plus (une cinquantaine de mots, ${MAX_CORPS_INITIAL} caractères maximum), en un ou deux courts paragraphes :
+1. Qui écrit et ce qu'il recherche : le poste visé (ou deux postes voisins, comme Category Management et Trade Marketing), avec au plus une ou deux expériences du profil (employeur et fonction) qui servent directement le propos — pas leur description.
+2. Pourquoi cette entreprise : UNE phrase personnalisée qui relie un élément réel de la fiche (une marque, un enjeu ou une actualité) à ce que le candidat sait faire. Sans fiche, une phrase sur le secteur.
+3. La démarche : une candidature spontanée, le CV en pièce jointe, et la proposition d'un court échange sur d'éventuelles opportunités.`,
     `${profilPourPrompt(profil)}
 
 ${entreprisePourPrompt(entreprise, contact)}
@@ -109,7 +124,7 @@ Poste visé : ${posteVise}`,
 
   return {
     objet: tronquer(nettoyerMarkdown(genere.objet), MAX_OBJET),
-    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact }),
+    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact, langue }),
     avertissements,
   };
 }
@@ -122,13 +137,14 @@ export async function genererRelance(params: {
   numero: number;
 }): Promise<MessageGenere> {
   const { profil, entreprise, contact, initial, numero } = params;
+  const langue = initial.langue;
 
   const genere = await rediger(
-    `Tu rédiges la relance n°${numero} d'un e-mail de candidature spontanée resté sans réponse, en français.
+    `Tu rédiges la relance n°${numero} d'un e-mail de candidature spontanée resté sans réponse.
 
-${REGLES_COMMUNES}
+${reglesCommunes(langue)}
 
-Une relance respecte le temps du destinataire : trois ou quatre phrases. Rappelle en une phrase le poste visé et le message précédent (envoyé le ${initial.date_envoi ?? "récemment"}), n'en répète pas le contenu, n'accuse pas l'absence de réponse. Tu peux apporter UN élément nouveau, mais seulement s'il existe dans le profil et n'a pas déjà été mentionné. Termine par une question simple et facile à traiter. ${MAX_CORPS_RELANCE} caractères maximum pour le corps.`,
+Une relance respecte le temps du destinataire : deux ou trois phrases (${MAX_CORPS_RELANCE} caractères maximum). Rappelle en une phrase le poste visé et le message précédent (envoyé le ${initial.date_envoi ?? "récemment"}), sans en répéter le contenu et sans reprocher l'absence de réponse. Tu peux apporter UN élément nouveau, mais seulement s'il existe dans le profil ou la fiche et n'a pas déjà été mentionné. Termine par une question simple, facile à traiter.`,
     `${profilPourPrompt(profil)}
 
 ${entreprisePourPrompt(entreprise, contact)}
@@ -150,7 +166,7 @@ ${initial.corps}`,
 
   return {
     objet: `Re: ${initial.objet.replace(/^Re:\s*/i, "")}`,
-    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact }),
+    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact, langue }),
     avertissements,
   };
 }

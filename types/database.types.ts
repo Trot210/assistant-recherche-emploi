@@ -25,6 +25,8 @@ export type ProspectionType = "initial" | "relance";
 
 export type ContactOrigine = "manuel" | "page_publique" | "hunter";
 
+export type Langue = "fr" | "en";
+
 export interface SousSection {
   titre: string;
   points: string[];
@@ -259,6 +261,8 @@ export interface Database {
           source_url: string | null;
           origine: ContactOrigine;
           generique: boolean;
+          pays: string | null;
+          langue: Langue | null;
           created_at: string;
         };
         Insert: {
@@ -272,6 +276,8 @@ export interface Database {
           source_url?: string | null;
           origine?: ContactOrigine;
           generique?: boolean;
+          pays?: string | null;
+          langue?: Langue | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
@@ -302,6 +308,8 @@ export interface Database {
           gmail_draft_id: string | null;
           gmail_message_id: string | null;
           gmail_thread_id: string | null;
+          langue: Langue;
+          smtp_message_id: string | null;
           date_envoi: string | null;
           nb_relances: number;
           prochaine_relance: string | null;
@@ -324,6 +332,8 @@ export interface Database {
           gmail_draft_id?: string | null;
           gmail_message_id?: string | null;
           gmail_thread_id?: string | null;
+          langue?: Langue;
+          smtp_message_id?: string | null;
           date_envoi?: string | null;
           nb_relances?: number;
           prochaine_relance?: string | null;

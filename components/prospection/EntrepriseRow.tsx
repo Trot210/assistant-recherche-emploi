@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { choisirMeilleurContact } from "@/lib/prospection/contacts";
+import { libelleLangue, suggererLangueContact } from "@/lib/prospection/langue";
 import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
-import type { EntrepriseStatut } from "@/types/database.types";
+import type { EntrepriseStatut, Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import FicheEntreprise from "./FicheEntreprise";
 
@@ -50,6 +52,8 @@ export default function EntrepriseRow({
   const [posteLibre, setPosteLibre] = useState("");
   const [contactId, setContactId] = useState("");
   const [redaction, setRedaction] = useState(false);
+  const [langueChoix, setLangueChoix] = useState<"auto" | Langue>("auto");
+  const [preparation, setPreparation] = useState<string | null>(null);
   const [analyse, setAnalyse] = useState(false);
   const [rechercheHunter, setRechercheHunter] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
@@ -181,6 +185,29 @@ export default function EntrepriseRow({
     onContactAjoute(data);
   }
 
+  const contactChoisi = contacts.find((c) => c.id === contactId);
+  const suggestionLangue = contactChoisi
+    ? suggererLangueContact(contactChoisi)
+    : { langue: "fr" as Langue, raison: "pas de contact choisi" };
+
+  // Demande la rédaction d'un message à valider ; la langue est celle choisie,
+  // sinon celle suggérée pour le contact côté serveur.
+  async function demanderMessage(posteVise: string, destinataireId: string, langue?: Langue): Promise<Prospection> {
+    const res = await fetch("/api/prospection/generer", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        entreprise_id: entreprise.id,
+        contact_id: destinataireId || undefined,
+        poste_vise: posteVise,
+        langue,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error ?? "Erreur lors de la rédaction");
+    return data.prospection;
+  }
+
   async function rediger() {
     const posteVise = poste === AUTRE ? posteLibre.trim() : poste;
     if (!posteVise) return setErreur("Précise le poste visé");
@@ -188,22 +215,72 @@ export default function EntrepriseRow({
     setRedaction(true);
     setErreur(null);
     try {
-      const res = await fetch("/api/prospection/generer", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          entreprise_id: entreprise.id,
-          contact_id: contactId || undefined,
-          poste_vise: posteVise,
-        }),
-      });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la rédaction");
-      onMessageCree(data.prospection);
+      onMessageCree(await demanderMessage(posteVise, contactId, langueChoix === "auto" ? undefined : langueChoix));
     } catch (e) {
       setErreur(e instanceof Error ? e.message : "Erreur lors de la rédaction");
     } finally {
       setRedaction(false);
+    }
+  }
+
+  // Enchaîne tout ce qui peut l'être : analyse, recherche de contacts, choix du
+  // destinataire et de la langue, rédaction. Rien n'est envoyé : le message
+  // arrive dans « Messages » pour vérification.
+  async function toutPreparer() {
+    setErreur(null);
+    setInfo(null);
+    try {
+      let courante = entreprise;
+      const tous = [...contacts];
+
+      if (!courante.fiche) {
+        setPreparation("Analyse de l'entreprise...");
+        const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/fiche`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'analyse");
+        courante = data.entreprise as Entreprise;
+        onEntrepriseChange(courante);
+        for (const contact of data.contacts as ContactEntreprise[]) {
+          onContactAjoute(contact);
+          tous.push(contact);
+        }
+      }
+
+      const posteVise = courante.fiche?.postes_suggeres[0]?.poste ?? (poste === AUTRE ? posteLibre.trim() : poste);
+      if (!posteVise) throw new Error("Précise le poste visé");
+      if ((POSTES_CIBLES as readonly string[]).includes(posteVise)) setPoste(posteVise);
+
+      // Hunter n'est interrogé que s'il manque un contact nominatif joignable :
+      // chaque recherche consomme le quota mensuel gratuit.
+      const domaine = courante.site_web ?? courante.fiche?.site_web;
+      if (hunterActif && domaine && !tous.some((c) => c.email && !c.generique)) {
+        setPreparation("Recherche de contacts (Hunter)...");
+        const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/contacts-hunter`, { method: "POST" });
+        const data = await res.json().catch(() => ({}));
+        if (res.ok) {
+          for (const contact of data.contacts as ContactEntreprise[]) {
+            onContactAjoute(contact);
+            tous.push(contact);
+          }
+        } else {
+          setInfo(`Hunter : ${data.error ?? "recherche impossible"}.`);
+        }
+      }
+
+      const destinataire = choisirMeilleurContact(tous, posteVise);
+      if (!destinataire) {
+        throw new Error(
+          "Aucune adresse e-mail trouvée pour cette entreprise : ajoute un contact avec son e-mail, puis clique sur « Rédiger le message ».",
+        );
+      }
+      setContactId(destinataire.id);
+
+      setPreparation("Rédaction du message...");
+      onMessageCree(await demanderMessage(posteVise, destinataire.id));
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de la préparation");
+    } finally {
+      setPreparation(null);
     }
   }
 
@@ -250,9 +327,16 @@ export default function EntrepriseRow({
             />
           </label>
 
+          <div className="prospection-actions">
+            <button className="action-btn primary" onClick={toutPreparer} disabled={preparation !== null || analyse}>
+              {preparation ?? "Tout préparer (analyse, contact, langue, message)"}
+            </button>
+            {hunterActif && <span className="prospection-meta">Utilise 1 recherche Hunter si aucun contact nominatif n&apos;est connu.</span>}
+          </div>
+
           <div>
             <div className="prospection-actions">
-              <button className="action-btn primary" onClick={analyser} disabled={analyse}>
+              <button className="action-btn" onClick={analyser} disabled={analyse || preparation !== null}>
                 {analyse
                   ? "Analyse en cours (environ 20 s)..."
                   : entreprise.fiche
@@ -377,7 +461,17 @@ export default function EntrepriseRow({
                   ))}
                 </select>
               </div>
-              <button className="action-btn primary" onClick={rediger} disabled={redaction}>
+              <div className="filter-group">
+                <span className="filter-group-label">Langue</span>
+                <select value={langueChoix} onChange={(e) => setLangueChoix(e.target.value as "auto" | Langue)}>
+                  <option value="auto">
+                    Auto : {libelleLangue(suggestionLangue.langue)} ({suggestionLangue.raison})
+                  </option>
+                  <option value="fr">Français</option>
+                  <option value="en">Anglais</option>
+                </select>
+              </div>
+              <button className="action-btn primary" onClick={rediger} disabled={redaction || preparation !== null}>
                 {redaction ? "Rédaction en cours..." : "Rédiger le message"}
               </button>
             </div>

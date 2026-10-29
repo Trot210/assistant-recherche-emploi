@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq("entreprise_id", entreprise.id)
       .eq("user_id", user.id);
 
-    const emails = await rechercherEmailsDomaine(domaine);
+    const { emails, pays } = await rechercherEmailsDomaine(domaine);
     const choisis = choisirContactsHunter(
       emails,
       (existants ?? []).map((c) => c.email).filter((e): e is string => Boolean(e)),
@@ -64,6 +64,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
                 poste: c.poste,
                 email: c.email,
                 origine: "hunter" as const,
+                pays,
                 source_url: c.source_url,
                 source_email: `Hunter.io${c.source_url ? ` — page source : ${c.source_url}` : ""}`,
               })),
