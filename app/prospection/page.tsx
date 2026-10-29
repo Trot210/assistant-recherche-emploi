@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import Prospection from "@/components/prospection/Prospection";
 import { gmailConfigure } from "@/lib/gmail/client";
 import { hunterConfigure } from "@/lib/hunter/client";
+import { imapConfigure } from "@/lib/mail/imap";
 import { smtpConfigure } from "@/lib/mail/smtp";
 
 export default async function ProspectionPage() {
@@ -18,5 +19,13 @@ export default async function ProspectionPage() {
 
   // Calculé côté serveur : les clés Gmail, Hunter et d'envoi ne doivent jamais atteindre
   // le navigateur, seul le fait qu'elles soient présentes ou non.
-  return <Prospection userId={user.id} gmailActif={gmailConfigure()} hunterActif={hunterConfigure()} smtpActif={smtpConfigure()} />;
+  return (
+    <Prospection
+      userId={user.id}
+      gmailActif={gmailConfigure()}
+      hunterActif={hunterConfigure()}
+      smtpActif={smtpConfigure()}
+      imapActif={imapConfigure()}
+    />
+  );
 }

@@ -1193,6 +1193,38 @@ select {
   color: #fff;
 }
 
+.status-pill.positif {
+  color: var(--emerald);
+}
+.status-pill.negatif {
+  color: var(--brick);
+}
+.status-pill.attente {
+  color: var(--navy);
+}
+.prospection-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+  font-size: 13.5px;
+}
+.prospection-texte {
+  white-space: pre-wrap;
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 1px solid var(--line-soft);
+}
+.prospection-citation {
+  font-size: 13.5px;
+  line-height: 1.5;
+  padding: 8px 12px;
+  border-left: 3px solid var(--navy);
+  background: var(--paper);
+  font-style: italic;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 34px;

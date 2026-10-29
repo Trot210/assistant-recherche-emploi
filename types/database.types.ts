@@ -27,6 +27,8 @@ export type ContactOrigine = "manuel" | "page_publique" | "hunter";
 
 export type Langue = "fr" | "en";
 
+export type ReponseType = "entretien" | "offre" | "refus" | "pas_de_poste" | "cv_non_conserve" | "autre";
+
 export interface SousSection {
   titre: string;
   points: string[];
@@ -313,6 +315,13 @@ export interface Database {
           date_envoi: string | null;
           nb_relances: number;
           prochaine_relance: string | null;
+          reponse_type: ReponseType | null;
+          reponse_date: string | null;
+          reponse_extrait: string | null;
+          reponse_url: string | null;
+          commentaire: string | null;
+          prochaine_action: string | null;
+          prochaine_action_date: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -337,6 +346,13 @@ export interface Database {
           date_envoi?: string | null;
           nb_relances?: number;
           prochaine_relance?: string | null;
+          reponse_type?: ReponseType | null;
+          reponse_date?: string | null;
+          reponse_extrait?: string | null;
+          reponse_url?: string | null;
+          commentaire?: string | null;
+          prochaine_action?: string | null;
+          prochaine_action_date?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -357,6 +373,26 @@ export interface Database {
             referencedColumns: ["id"];
           },
         ];
+      };
+      reponses_traitees: {
+        Row: {
+          id: string;
+          user_id: string;
+          message_id: string;
+          prospection_id: string | null;
+          decision: "associee" | "ignoree";
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          message_id: string;
+          prospection_id?: string | null;
+          decision: "associee" | "ignoree";
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reponses_traitees"]["Insert"]>;
+        Relationships: [];
       };
     };
     Views: { [_ in never]: never };

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { formaterDateFr } from "@/lib/prospection/dates";
+import { estEnvoye } from "@/lib/prospection/suppression";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection as ProspectionRow } from "@/types/prospection";
@@ -10,6 +12,8 @@ import RechercheEntreprises from "./RechercheEntreprises";
 import EntrepriseRow from "./EntrepriseRow";
 import MessageCard, { type CvInfo } from "./MessageCard";
 import CvReference from "./CvReference";
+import MessageEnvoye from "./MessageEnvoye";
+import ReponsesPanel from "./ReponsesPanel";
 
 type Onglet = "entreprises" | "messages" | "relances";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
@@ -19,13 +23,14 @@ interface Props {
   gmailActif: boolean;
   hunterActif: boolean;
   smtpActif: boolean;
+  imapActif: boolean;
 }
 
 // Les listes ci-dessous sont chargées en entier : ce volet gère quelques
 // dizaines à quelques centaines d'entreprises ciblées à la main, loin des
 // 1000 lignes que PostgREST renvoie par défaut. Si l'import devait
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
-export default function Prospection({ userId, gmailActif, hunterActif, smtpActif }: Props) {
+export default function Prospection({ userId, gmailActif, hunterActif, smtpActif, imapActif }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [onglet, setOnglet] = useState<Onglet>("entreprises");
   const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>("en_cours");
@@ -90,11 +95,13 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
     };
   }, [prospections, entreprisesActives, aujourdhui]);
 
-  const messagesAffiches = prospections.filter((p) => {
-    if (filtreMessages === "en_cours") return estEnCours(p.statut);
-    if (filtreMessages === "envoyes") return !estEnCours(p.statut);
-    return true;
-  });
+  // « À traiter » : brouillons et messages prêts. « Envoyés et clos » : un fil par
+  // candidature envoyée (le message initial ; ses relances s'affichent dedans).
+  const messagesEnCours = prospections.filter((p) => estEnCours(p.statut));
+  const fils = prospections.filter((p) => p.type === "initial" && estEnvoye(p));
+  const actionsPrevues = fils
+    .filter((p) => p.prochaine_action)
+    .sort((a, b) => ((a.prochaine_action_date ?? "9999") < (b.prochaine_action_date ?? "9999") ? -1 : 1));
 
   const relances = prospections
     .filter((p) => p.type === "initial" && p.statut === "envoyee" && p.prochaine_relance !== null)
@@ -260,8 +267,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
           <div className="chip-row" style={{ marginBottom: 16 }}>
             {(
               [
-                ["en_cours", "À traiter"],
-                ["envoyes", "Envoyés et clos"],
+                ["en_cours", `À traiter (${messagesEnCours.length})`],
+                ["envoyes", `Envoyés et clos (${fils.length})`],
                 ["tous", "Tous"],
               ] as [FiltreMessages, string][]
             ).map(([id, libelle]) => (
@@ -274,27 +281,73 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
               </button>
             ))}
           </div>
+
+          {(filtreMessages === "envoyes" || filtreMessages === "tous") && imapActif && (
+            <ReponsesPanel onAssociee={remplacerProspection} onFilModifie={charger} />
+          )}
+
           <div className="prospection-liste">
-            {messagesAffiches.length === 0 && (
-              <p className="track-empty">Aucun message ici. Rédige-en un depuis la fiche d&apos;une entreprise.</p>
+            {filtreMessages !== "envoyes" && messagesEnCours.length === 0 && filtreMessages === "en_cours" && (
+              <p className="track-empty">Aucun message à traiter. Rédige-en un depuis la fiche d&apos;une entreprise.</p>
             )}
-            {messagesAffiches.map((p) => (
-              <MessageCard
-                key={p.id}
-                cvs={cvs}
-                smtpActif={smtpActif}
-                prospection={p}
-                entreprise={entrepriseParId.get(p.entreprise_id)}
-                contact={p.contact_id ? contactParId.get(p.contact_id) : undefined}
-                gmailActif={gmailActif}
-                onChange={remplacerProspection}
-                onFilModifie={charger}
-                nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
-                onSupprime={retirerMessages}
-              />
-            ))}
+            {filtreMessages !== "envoyes" &&
+              messagesEnCours.map((p) => (
+                <MessageCard
+                  key={p.id}
+                  cvs={cvs}
+                  smtpActif={smtpActif}
+                  prospection={p}
+                  entreprise={entrepriseParId.get(p.entreprise_id)}
+                  contact={p.contact_id ? contactParId.get(p.contact_id) : undefined}
+                  gmailActif={gmailActif}
+                  onChange={remplacerProspection}
+                  onFilModifie={charger}
+                  nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
+                  onSupprime={retirerMessages}
+                />
+              ))}
+
+            {filtreMessages !== "en_cours" && fils.length === 0 && (
+              <p className="track-empty">Aucune candidature envoyée pour l&apos;instant.</p>
+            )}
+            {filtreMessages !== "en_cours" &&
+              fils.map((p) => (
+                <MessageEnvoye
+                  key={p.id}
+                  prospection={p}
+                  relances={prospections.filter((r) => r.parent_id === p.id && estEnvoye(r))}
+                  nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
+                  entreprise={entrepriseParId.get(p.entreprise_id)}
+                  contact={p.contact_id ? contactParId.get(p.contact_id) : undefined}
+                  cvs={cvs}
+                  onChange={remplacerProspection}
+                  onFilModifie={charger}
+                  onSupprime={retirerMessages}
+                />
+              ))}
           </div>
         </>
+      )}
+
+      {!chargement && onglet === "relances" && actionsPrevues.length > 0 && (
+        <div className="prospection-bloc">
+          <h3>Prochaines actions</h3>
+          <div className="prospection-liste">
+            {actionsPrevues.map((p) => (
+              <div
+                key={p.id}
+                className={`prospection-ligne${p.prochaine_action_date && p.prochaine_action_date <= aujourdhui ? " due" : ""}`}
+              >
+                <div className="prospection-titre">
+                  {entrepriseParId.get(p.entreprise_id)?.nom ?? "Entreprise"} — {p.prochaine_action}
+                </div>
+                <div className="prospection-meta">
+                  {p.prochaine_action_date ? `Pour le ${formaterDateFr(p.prochaine_action_date)}` : "Sans date"}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {!chargement && onglet === "relances" && (

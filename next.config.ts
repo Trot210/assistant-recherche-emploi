@@ -9,7 +9,9 @@ const nextConfig: NextConfig = {
   // '.../pdfkit/js/standard-fonts/Helvetica.cjs'", alors que ça fonctionne
   // en local où node_modules est présent en entier). On force leur
   // inclusion explicitement pour les routes qui génèrent des PDF.
-  serverExternalPackages: ["@react-pdf/renderer"],
+  // imapflow et mailparser (lecture des réponses par e-mail) ne sont pas non plus
+  // faits pour être regroupés par le bundler : ils restent des paquets externes.
+  serverExternalPackages: ["@react-pdf/renderer", "imapflow", "mailparser"],
   outputFileTracingIncludes: {
     "/api/documents/cv": [
       "./node_modules/pdfkit/js/**/*",
