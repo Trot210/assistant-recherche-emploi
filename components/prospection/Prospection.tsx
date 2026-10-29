@@ -15,13 +15,14 @@ type FiltreMessages = "en_cours" | "envoyes" | "tous";
 interface Props {
   userId: string;
   gmailActif: boolean;
+  hunterActif: boolean;
 }
 
 // Les listes ci-dessous sont chargées en entier : ce volet gère quelques
 // dizaines à quelques centaines d'entreprises ciblées à la main, loin des
 // 1000 lignes que PostgREST renvoie par défaut. Si l'import devait
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
-export default function Prospection({ userId, gmailActif }: Props) {
+export default function Prospection({ userId, gmailActif, hunterActif }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [onglet, setOnglet] = useState<Onglet>("entreprises");
   const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>("en_cours");
@@ -192,6 +193,7 @@ export default function Prospection({ userId, gmailActif }: Props) {
               <EntrepriseRow
                 key={entreprise.id}
                 userId={userId}
+                hunterActif={hunterActif}
                 entreprise={entreprise}
                 contacts={contacts.filter((c) => c.entreprise_id === entreprise.id)}
                 nbMessages={nbParEntreprise.get(entreprise.id) ?? 0}

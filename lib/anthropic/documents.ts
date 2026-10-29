@@ -295,9 +295,10 @@ export async function verifierFidelite(
   offre: Offre,
   texteAVerifier: string,
   contexteDocument: string,
+  modele = "claude-opus-5",
 ): Promise<string[]> {
   const response = await anthropic.messages.parse({
-    model: "claude-opus-5",
+    model: modele,
     // Claude Opus 5 réfléchit par défaut (adaptive thinking) et ces tokens
     // de réflexion sont décomptés du même budget que la réponse JSON — à
     // 1024 la sortie structurée se faisait tronquer en plein milieu d'une

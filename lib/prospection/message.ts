@@ -2,6 +2,7 @@ import type { Contact as ContactCandidat } from "@/types/database.types";
 import type { Entreprise } from "@/types/prospection";
 import type { Offre } from "@/types/offre";
 import { libelleTranche } from "@/lib/prospection/secteurs";
+import { resumerFiche } from "@/lib/prospection/fiche";
 
 // Claude ne rédige que le cœur du message. Formule d'appel, signature et
 // mention de désinscription sont ajoutées par l'application : elles viennent
@@ -27,9 +28,9 @@ export function assemblerMessage(params: {
 
 // Les fonctions de génération et de contrôle qualité du reste de
 // l'application travaillent sur une offre : une candidature spontanée en
-// reçoit une fictive, bâtie uniquement sur des faits connus (Sirene + note
-// personnelle de l'utilisateur) pour que le contrôle de fidélité ne laisse
-// passer aucune affirmation inventée sur l'entreprise.
+// reçoit une fictive, bâtie uniquement sur des faits connus (Sirene, fiche
+// sourcée et note personnelle de l'utilisateur) pour que le contrôle de
+// fidélité ne laisse passer aucune affirmation inventée sur l'entreprise.
 export function offrePourProspection(entreprise: Entreprise, posteVise: string): Offre {
   const faits = [
     "Candidature spontanée : aucune offre n'est publiée.",
@@ -37,6 +38,7 @@ export function offrePourProspection(entreprise: Entreprise, posteVise: string):
     entreprise.tranche_effectif ? `Effectif : ${libelleTranche(entreprise.tranche_effectif)}.` : null,
     entreprise.commune ? `Implantation du siège : ${entreprise.commune}.` : null,
     entreprise.notes ? `Information fournie par le candidat sur l'entreprise : ${entreprise.notes}` : null,
+    resumerFiche(entreprise.fiche) || null,
   ].filter(Boolean);
 
   return {

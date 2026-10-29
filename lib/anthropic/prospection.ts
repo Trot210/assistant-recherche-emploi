@@ -4,7 +4,12 @@ import { anthropic } from "@/lib/anthropic/client";
 import { nettoyerMarkdown, tronquer, verifierFidelite } from "@/lib/anthropic/documents";
 import { assemblerMessage, offrePourProspection } from "@/lib/prospection/message";
 import type { Profil } from "@/types/profil";
+import { resumerFiche } from "@/lib/prospection/fiche";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
+
+// Les messages spontanés sont courts et nombreux : le modèle Sonnet (moins
+// cher que celui des CV et lettres) suffit pour les rédiger et les contrôler.
+const MODELE = "claude-sonnet-5-5";
 
 const MAX_CORPS_INITIAL = 1000;
 const MAX_CORPS_RELANCE = 550;
@@ -27,24 +32,31 @@ Formation : ${JSON.stringify(profil.formation)}
 CV (texte libre complémentaire) : ${profil.cv_texte ?? "non renseigné"}`;
 }
 
+// Un contact générique (adresse recrutement@...) n'a pas de nom à saluer.
+export function nomAPrefixer(contact: ContactEntreprise | null): string | null {
+  return contact && !contact.generique ? contact.nom : null;
+}
+
 function entreprisePourPrompt(entreprise: Entreprise, contact: ContactEntreprise | null): string {
+  const fiche = resumerFiche(entreprise.fiche);
   return `Ce que l'on SAIT de l'entreprise (SOURCE UNIQUE — n'affirme rien d'autre sur elle) :
 Nom : ${entreprise.nom}
 Secteur : ${entreprise.secteur ?? "non précisé"}
 Implantation : ${entreprise.commune ?? "non précisée"}
-Accroche fournie par le candidat : ${entreprise.notes?.trim() || "aucune"}
-Destinataire : ${contact ? `${contact.nom}${contact.poste ? `, ${contact.poste}` : ""}` : "inconnu (adresse générique)"}`;
+${fiche ? `Fiche issue de sources publiques :\n${fiche}\n` : ""}Accroche fournie par le candidat : ${entreprise.notes?.trim() || "aucune"}
+Destinataire : ${contact && !contact.generique ? `${contact.nom}${contact.poste ? `, ${contact.poste}` : ""}` : "adresse générique de l'entreprise"}`;
 }
 
 const REGLES_COMMUNES = `Règle absolue — aucune invention :
 - Sur le candidat : uniquement des faits présents dans son profil. Pas de durée d'expérience calculée, pas de chiffre, d'outil, de diplôme ou de responsabilité de management absents du profil.
-- Sur l'entreprise : uniquement les informations listées sous « Ce que l'on SAIT de l'entreprise ». N'invente aucun produit, lancement, chiffre, valeur d'entreprise ni actualité. Si aucune accroche n'est fournie, ne prétends pas connaître l'entreprise de près : reste sur le secteur et le poste visé.
+- Sur l'entreprise : uniquement les informations listées sous « Ce que l'on SAIT de l'entreprise ». N'invente aucun produit, lancement, chiffre, valeur d'entreprise ni actualité. Quand une fiche est fournie, appuie-toi sur un ou deux de ses éléments (une marque, un enjeu, une actualité) qui rencontrent réellement le profil du candidat, sans les énumérer. Sans fiche ni accroche, ne prétends pas connaître l'entreprise de près : reste sur le secteur et le poste visé.
+- Mets en avant les expériences du profil les plus pertinentes pour CE poste dans CETTE entreprise (expérience en enseigne pour un distributeur, côté industriel pour un fabricant).
 
 Ton : direct, professionnel, humain — jamais de formule creuse (« passionné par votre secteur », « profil qui correspond parfaitement »). Chaque phrase apporte un fait ou une demande précise. Texte brut uniquement, sans markdown, sans liste à puces.`;
 
 async function rediger(system: string, user: string) {
   const response = await anthropic.messages.parse({
-    model: "claude-opus-5",
+    model: MODELE,
     // Marge au-delà de la sortie : la réflexion adaptative est décomptée du
     // même budget (voir verifierFidelite).
     max_tokens: 4096,
@@ -92,11 +104,12 @@ Poste visé : ${posteVise}`,
     offrePourProspection(entreprise, posteVise),
     corps,
     "E-mail de candidature spontanée",
+    MODELE,
   );
 
   return {
     objet: tronquer(nettoyerMarkdown(genere.objet), MAX_OBJET),
-    corps: assemblerMessage({ corps, contactNom: contact?.nom, candidat: profil.contact }),
+    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact }),
     avertissements,
   };
 }
@@ -132,11 +145,12 @@ ${initial.corps}`,
     offrePourProspection(entreprise, initial.poste_vise),
     corps,
     "Relance de candidature spontanée",
+    MODELE,
   );
 
   return {
     objet: `Re: ${initial.objet.replace(/^Re:\s*/i, "")}`,
-    corps: assemblerMessage({ corps, contactNom: contact?.nom, candidat: profil.contact }),
+    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact }),
     avertissements,
   };
 }

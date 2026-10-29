@@ -1,3 +1,5 @@
+import type { Fiche } from "@/types/fiche";
+
 // Types générés manuellement à partir des migrations SQL (supabase/migrations).
 // A régénérer avec `supabase gen types typescript` une fois le projet Supabase lié.
 
@@ -20,6 +22,8 @@ export type ProspectionStatut =
   | "sans_suite";
 
 export type ProspectionType = "initial" | "relance";
+
+export type ContactOrigine = "manuel" | "page_publique" | "hunter";
 
 export interface SousSection {
   titre: string;
@@ -217,6 +221,8 @@ export interface Database {
           site_web: string | null;
           notes: string | null;
           statut: EntrepriseStatut;
+          fiche: Fiche | null;
+          fiche_generee_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -234,6 +240,8 @@ export interface Database {
           site_web?: string | null;
           notes?: string | null;
           statut?: EntrepriseStatut;
+          fiche?: Fiche | null;
+          fiche_generee_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["entreprises"]["Insert"]>;
@@ -248,6 +256,9 @@ export interface Database {
           poste: string | null;
           email: string | null;
           source_email: string | null;
+          source_url: string | null;
+          origine: ContactOrigine;
+          generique: boolean;
           created_at: string;
         };
         Insert: {
@@ -258,6 +269,9 @@ export interface Database {
           poste?: string | null;
           email?: string | null;
           source_email?: string | null;
+          source_url?: string | null;
+          origine?: ContactOrigine;
+          generique?: boolean;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;

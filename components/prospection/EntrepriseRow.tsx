@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/client";
 import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
 import type { EntrepriseStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
+import FicheEntreprise from "./FicheEntreprise";
 
 interface Props {
   userId: string;
+  hunterActif: boolean;
   entreprise: Entreprise;
   contacts: ContactEntreprise[];
   nbMessages: number;
@@ -28,6 +30,7 @@ const AUTRE = "__autre__";
 
 export default function EntrepriseRow({
   userId,
+  hunterActif,
   entreprise,
   contacts,
   nbMessages,
@@ -39,15 +42,19 @@ export default function EntrepriseRow({
   const supabase = useMemo(() => createClient(), []);
   const [ouvert, setOuvert] = useState(false);
   const [notes, setNotes] = useState(entreprise.notes ?? "");
+  const [site, setSite] = useState(entreprise.site_web ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
 
   const [nouveauContact, setNouveauContact] = useState({ nom: "", poste: "", email: "", source: "" });
-  const [poste, setPoste] = useState<string>(POSTES_CIBLES[0]);
+  const [poste, setPoste] = useState<string>(entreprise.fiche?.postes_suggeres[0]?.poste ?? POSTES_CIBLES[0]);
   const [posteLibre, setPosteLibre] = useState("");
   const [contactId, setContactId] = useState("");
   const [redaction, setRedaction] = useState(false);
+  const [analyse, setAnalyse] = useState(false);
+  const [rechercheHunter, setRechercheHunter] = useState(false);
+  const [info, setInfo] = useState<string | null>(null);
 
-  async function mettreAJour(champs: Partial<Pick<Entreprise, "statut" | "notes">>) {
+  async function mettreAJour(champs: Partial<Pick<Entreprise, "statut" | "notes" | "site_web">>) {
     setErreur(null);
     const { data, error } = await supabase
       .from("entreprises")
@@ -60,6 +67,17 @@ export default function EntrepriseRow({
       return;
     }
     onEntrepriseChange(data);
+  }
+
+  async function enregistrerSite() {
+    const saisi = site.trim();
+    if (saisi === (entreprise.site_web ?? "")) return;
+    if (saisi && !/^(https?:\/\/)?[^\s/]+\.[^\s/]+/.test(saisi)) {
+      return setErreur("Adresse de site invalide (exemple : groupe-bel.com)");
+    }
+    const normalise = saisi ? (saisi.includes("://") ? saisi : `https://${saisi}`) : null;
+    setSite(normalise ?? "");
+    await mettreAJour({ site_web: normalise });
   }
 
   async function ajouterContact() {
@@ -95,6 +113,72 @@ export default function EntrepriseRow({
     if (error) return setErreur(error.message);
     onContactSupprime(id);
     if (contactId === id) setContactId("");
+  }
+
+  async function analyser() {
+    setAnalyse(true);
+    setErreur(null);
+    setInfo(null);
+    try {
+      const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/fiche`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'analyse");
+      onEntrepriseChange(data.entreprise);
+      for (const contact of data.contacts as ContactEntreprise[]) onContactAjoute(contact);
+      const suggere = (data.entreprise as Entreprise).fiche?.postes_suggeres[0]?.poste;
+      if (suggere) setPoste(suggere);
+      setInfo(`Analyse terminée — ${data.contacts.length} contact(s) trouvé(s) sur des pages publiques.`);
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de l'analyse");
+    } finally {
+      setAnalyse(false);
+    }
+  }
+
+  async function chercherHunter() {
+    setRechercheHunter(true);
+    setErreur(null);
+    setInfo(null);
+    try {
+      const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/contacts-hunter`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la recherche");
+      for (const contact of data.contacts as ContactEntreprise[]) onContactAjoute(contact);
+      const quota = data.quota ? ` Il te reste ${data.quota.disponibles - data.quota.utilisees} recherche(s) ce mois-ci.` : "";
+      setInfo(
+        data.contacts.length > 0
+          ? `${data.contacts.length} contact(s) ajouté(s).${quota}`
+          : `Aucun contact pertinent trouvé (${data.trouves} adresse(s) examinée(s)).${quota}`,
+      );
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de la recherche");
+    } finally {
+      setRechercheHunter(false);
+    }
+  }
+
+  // Adresse trouvée par l'analyse mais non confirmée par un extrait de la page :
+  // elle n'est ajoutée qu'après vérification par l'utilisateur.
+  async function ajouterAdresseAVerifier() {
+    const adresse = entreprise.fiche?.adresse_candidature;
+    if (!adresse) return;
+    const { data, error } = await supabase
+      .from("contacts")
+      .insert({
+        user_id: userId,
+        entreprise_id: entreprise.id,
+        nom: "Recrutement",
+        poste: "Candidatures spontanées",
+        email: adresse.email,
+        generique: true,
+        origine: "page_publique",
+        source_url: adresse.source_url,
+        source_email: `Page publique de l'entreprise : ${adresse.source_url} (vérifiée par moi)`,
+      })
+      .select()
+      .single();
+    if (error) return setErreur(error.message);
+    onContactAjoute(data);
   }
 
   async function rediger() {
@@ -156,6 +240,40 @@ export default function EntrepriseRow({
       {ouvert && (
         <div className="prospection-detail">
           <label>
+            Site web de l&apos;entreprise (colle-le ici pour éviter la recherche automatique, qui coûte environ 1 centime)
+            <input
+              type="text"
+              value={site}
+              onChange={(e) => setSite(e.target.value)}
+              onBlur={enregistrerSite}
+              placeholder="ex : groupe-bel.com"
+            />
+          </label>
+
+          <div>
+            <div className="prospection-actions">
+              <button className="action-btn primary" onClick={analyser} disabled={analyse}>
+                {analyse
+                  ? "Analyse en cours (environ 20 s)..."
+                  : entreprise.fiche
+                    ? "Actualiser l'analyse"
+                    : "Analyser l'entreprise"}
+              </button>
+              {hunterActif && (
+                <button
+                  className="action-btn"
+                  onClick={chercherHunter}
+                  disabled={rechercheHunter || !(entreprise.site_web ?? entreprise.fiche?.site_web)}
+                  title="Utilise une recherche de ton quota mensuel gratuit Hunter"
+                >
+                  {rechercheHunter ? "Recherche..." : "Chercher des contacts (Hunter)"}
+                </button>
+              )}
+            </div>
+            {entreprise.fiche && <FicheEntreprise fiche={entreprise.fiche} onAjouterAdresse={ajouterAdresseAVerifier} />}
+          </div>
+
+          <label>
             Accroche personnelle (un fait réel sur l&apos;entreprise que tu veux mentionner — sinon le message restera
             sobre)
             <textarea
@@ -177,7 +295,18 @@ export default function EntrepriseRow({
                   <b>{c.nom}</b>
                   {c.poste && ` — ${c.poste}`}
                   {c.email ? ` — ${c.email}` : " — pas d'e-mail"}
-                  {c.source_email && <span className="prospection-meta"> (source : {c.source_email})</span>}
+                  {c.source_url ? (
+                    <span className="prospection-meta">
+                      {" "}
+                      (
+                      <a href={c.source_url} target="_blank" rel="noopener noreferrer">
+                        {c.origine === "hunter" ? "Hunter · page source" : "page source"}
+                      </a>
+                      )
+                    </span>
+                  ) : (
+                    c.source_email && <span className="prospection-meta"> (source : {c.source_email})</span>
+                  )}
                 </span>
                 <button className="prospection-link-btn" onClick={() => supprimerContact(c.id)}>
                   Supprimer
@@ -256,6 +385,7 @@ export default function EntrepriseRow({
         </div>
       )}
 
+      {info && <p className="prospection-info" style={{ marginTop: 10 }}>{info}</p>}
       {erreur && <p className="prospection-erreur" style={{ marginTop: 10 }}>{erreur}</p>}
     </div>
   );

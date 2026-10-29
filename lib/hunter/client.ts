@@ -1,0 +1,61 @@
+import type { EmailHunter } from "@/lib/hunter/selection";
+
+// Hunter.io : l'offre gratuite donne un petit quota mensuel de recherches. La
+// clé est facultative — sans elle, la recherche de contacts par Hunter est
+// simplement masquée dans l'interface.
+const API = "https://api.hunter.io/v2";
+
+export function hunterConfigure(): boolean {
+  return Boolean(process.env.HUNTER_API_KEY);
+}
+
+export class QuotaHunterEpuise extends Error {
+  constructor() {
+    super("Le quota de recherches Hunter de ce mois est épuisé");
+    this.name = "QuotaHunterEpuise";
+  }
+}
+
+async function appeler<T>(chemin: string, params: Record<string, string>): Promise<T> {
+  const apiKey = process.env.HUNTER_API_KEY;
+  if (!apiKey) throw new Error("HUNTER_API_KEY n'est pas défini dans .env.local");
+
+  // La clé voyage en en-tête plutôt que dans l'URL, pour ne pas finir dans des journaux.
+  const res = await fetch(`${API}${chemin}?${new URLSearchParams(params)}`, {
+    headers: { "X-API-KEY": apiKey, Accept: "application/json" },
+    cache: "no-store",
+  });
+
+  if (res.status === 429) throw new QuotaHunterEpuise();
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Hunter a répondu ${res.status}${detail ? ` : ${detail.slice(0, 200)}` : ""}`);
+  }
+  return (await res.json()) as T;
+}
+
+export async function rechercherEmailsDomaine(domaine: string): Promise<EmailHunter[]> {
+  const data = await appeler<{ data?: { emails?: EmailHunter[] } }>("/domain-search", {
+    domain: domaine,
+    limit: "10",
+    type: "personal",
+    // L'offre gratuite ne renvoie que 10 adresses par recherche : on les
+    // demande dans les services utiles plutôt que parmi les dirigeants.
+    department: "marketing,sales,hr",
+  });
+  return data.data?.emails ?? [];
+}
+
+export async function quotaHunter(): Promise<{ utilisees: number; disponibles: number } | null> {
+  try {
+    const data = await appeler<{ data?: { requests?: { searches?: { used?: number; available?: number } } } }>(
+      "/account",
+      {},
+    );
+    const recherches = data.data?.requests?.searches;
+    if (recherches?.used === undefined || recherches.available === undefined) return null;
+    return { utilisees: recherches.used, disponibles: recherches.available };
+  } catch {
+    return null;
+  }
+}
