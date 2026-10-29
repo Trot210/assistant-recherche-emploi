@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
-import { lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
+import { libelleCv, lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
 import { appliquerAction, aujourdhuiParis } from "@/lib/prospection/workflow";
 
 // Plafond d'envois par jour : au-delà, un compte personnel est vite signalé
@@ -91,11 +91,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const joindreCv: boolean = typeof body?.joindre_cv === "boolean" ? body.joindre_cv : true;
   let pieceJointe;
   if (joindreCv) {
-    const cv = await lireCvReference(supabase, user.id);
+    // Le CV joint suit la langue du message : jamais le CV français sous un
+    // message anglais (ni l'inverse).
+    const cv = await lireCvReference(supabase, user.id, prospection.langue);
     if (!cv) {
-      return NextResponse.json({ error: "Aucun CV n'est enregistré : ajoute-le avant d'envoyer" }, { status: 409 });
+      return NextResponse.json(
+        { error: `Aucun ${libelleCv(prospection.langue).toLowerCase()} n'est enregistré : ajoute-le avant d'envoyer` },
+        { status: 409 },
+      );
     }
-    pieceJointe = { nomFichier: nomPieceJointeCv(profil?.contact?.nom), contenu: cv.contenu };
+    pieceJointe = { nomFichier: nomPieceJointeCv(profil?.contact?.nom, prospection.langue), contenu: cv.contenu };
   }
 
   // On « réserve » le message en le passant à envoyé AVANT l'envoi : un

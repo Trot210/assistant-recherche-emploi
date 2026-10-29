@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { creerBrouillon, GmailNonConfigure } from "@/lib/gmail/client";
-import { lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
+import { libelleCv, lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
 
 export const maxDuration = 30;
 
@@ -60,9 +60,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     let cvBuffer: Buffer | undefined;
 
     if (joindreCv) {
-      const cv = await lireCvReference(supabase, user.id);
+      const cv = await lireCvReference(supabase, user.id, prospection.langue);
       if (!cv) {
-        return NextResponse.json({ error: "Aucun CV n'est enregistré : ajoute-le avant de créer le brouillon" }, { status: 409 });
+        return NextResponse.json(
+          { error: `Aucun ${libelleCv(prospection.langue).toLowerCase()} n'est enregistré : ajoute-le avant de créer le brouillon` },
+          { status: 409 },
+        );
       }
       cvBuffer = cv.contenu;
     }
@@ -74,7 +77,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       corps: prospection.corps,
       threadId: prospection.gmail_thread_id,
       pieceJointe: cvBuffer
-        ? { nomFichier: nomPieceJointeCv(nomCandidat), contentType: "application/pdf", contenu: cvBuffer }
+        ? { nomFichier: nomPieceJointeCv(nomCandidat, prospection.langue), contentType: "application/pdf", contenu: cvBuffer }
         : undefined,
     });
 

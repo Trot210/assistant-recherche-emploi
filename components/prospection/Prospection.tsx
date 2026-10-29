@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
+import type { Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection as ProspectionRow } from "@/types/prospection";
 import RechercheEntreprises from "./RechercheEntreprises";
 import EntrepriseRow from "./EntrepriseRow";
@@ -34,7 +35,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
-  const [cv, setCv] = useState<CvInfo | null>(null);
+  const [cvs, setCvs] = useState<Record<Langue, CvInfo | null>>({ fr: null, en: null });
 
   const charger = useCallback(async () => {
     const [e, c, p] = await Promise.all([
@@ -56,7 +57,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const chargerCv = useCallback(async () => {
     const res = await fetch("/api/profil/cv");
     const data = await res.json().catch(() => ({}));
-    setCv(res.ok ? (data.cv ?? null) : null);
+    setCvs(res.ok && data.cv ? data.cv : { fr: null, en: null });
   }, []);
 
   useEffect(() => {
@@ -170,7 +171,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
 
-      <CvReference cv={cv} onChange={chargerCv} />
+      <CvReference cvs={cvs} onChange={chargerCv} />
 
       <div className="prospection-tabs">
         {(
@@ -245,7 +246,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             {messagesAffiches.map((p) => (
               <MessageCard
                 key={p.id}
-                cv={cv}
+                cvs={cvs}
                 smtpActif={smtpActif}
                 prospection={p}
                 entreprise={entrepriseParId.get(p.entreprise_id)}

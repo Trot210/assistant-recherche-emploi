@@ -1,16 +1,30 @@
 "use client";
 
 import { useRef, useState } from "react";
+import type { Langue } from "@/types/database.types";
 import type { CvInfo } from "./MessageCard";
 
 interface Props {
-  cv: CvInfo | null;
+  cvs: Record<Langue, CvInfo | null>;
   onChange: () => Promise<void>;
 }
 
-// Le CV joint à chaque message : un PDF, enregistré une fois, ouvert ici pour
-// être vérifié avant tout envoi.
-export default function CvReference({ cv, onChange }: Props) {
+const EMPLACEMENTS: { langue: Langue; libelle: string }[] = [
+  { langue: "fr", libelle: "CV français — joint aux messages en français" },
+  { langue: "en", libelle: "CV anglais — joint aux messages en anglais" },
+];
+
+function Emplacement({
+  langue,
+  libelle,
+  cv,
+  onChange,
+}: {
+  langue: Langue;
+  libelle: string;
+  cv: CvInfo | null;
+  onChange: () => Promise<void>;
+}) {
   const champ = useRef<HTMLInputElement>(null);
   const [envoi, setEnvoi] = useState(false);
   const [erreur, setErreur] = useState<string | null>(null);
@@ -21,6 +35,7 @@ export default function CvReference({ cv, onChange }: Props) {
     try {
       const formData = new FormData();
       formData.append("cv", fichier);
+      formData.append("langue", langue);
       const res = await fetch("/api/profil/cv", { method: "PUT", body: formData });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'envoi du CV");
@@ -34,8 +49,10 @@ export default function CvReference({ cv, onChange }: Props) {
   }
 
   return (
-    <div className="prospection-bloc" style={{ marginBottom: 18 }}>
-      <h3>Mon CV joint aux messages</h3>
+    <div style={{ marginBottom: 10 }}>
+      <div className="filter-group-label" style={{ marginBottom: 4 }}>
+        {libelle}
+      </div>
       <div className="prospection-actions">
         {cv ? (
           <span style={{ fontSize: 13.5 }}>
@@ -54,7 +71,7 @@ export default function CvReference({ cv, onChange }: Props) {
           <span className="prospection-erreur">Aucun CV enregistré : ajoute ton PDF pour pouvoir envoyer.</span>
         )}
         <button className="action-btn" onClick={() => champ.current?.click()} disabled={envoi}>
-          {envoi ? "Envoi..." : cv ? "Remplacer le CV" : "Ajouter mon CV (PDF)"}
+          {envoi ? "Envoi..." : cv ? "Remplacer" : "Ajouter (PDF)"}
         </button>
         <input
           ref={champ}
@@ -64,7 +81,20 @@ export default function CvReference({ cv, onChange }: Props) {
           onChange={(e) => e.target.files?.[0] && televerser(e.target.files[0])}
         />
       </div>
-      {erreur && <p className="prospection-erreur" style={{ marginTop: 8 }}>{erreur}</p>}
+      {erreur && <p className="prospection-erreur" style={{ marginTop: 6 }}>{erreur}</p>}
+    </div>
+  );
+}
+
+// Les CV joints : un PDF par langue, choisi automatiquement d'après la langue
+// du message, et ouvrable ici pour être vérifié avant tout envoi.
+export default function CvReference({ cvs, onChange }: Props) {
+  return (
+    <div className="prospection-bloc" style={{ marginBottom: 18 }}>
+      <h3>Mes CV joints aux messages</h3>
+      {EMPLACEMENTS.map((e) => (
+        <Emplacement key={e.langue} langue={e.langue} libelle={e.libelle} cv={cvs[e.langue]} onChange={onChange} />
+      ))}
     </div>
   );
 }

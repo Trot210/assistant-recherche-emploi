@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { libelleLangue } from "@/lib/prospection/langue";
-import type { ProspectionStatut } from "@/types/database.types";
+import type { Langue, ProspectionStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 
 export interface CvInfo {
@@ -12,7 +12,7 @@ export interface CvInfo {
 }
 
 interface Props {
-  cv: CvInfo | null;
+  cvs: Record<Langue, CvInfo | null>;
   smtpActif: boolean;
   prospection: Prospection;
   entreprise: Entreprise | undefined;
@@ -38,7 +38,7 @@ function formaterDate(dateIso: string | null): string {
   return `${jour}/${mois}/${annee}`;
 }
 
-export default function MessageCard({ cv, smtpActif, prospection, entreprise, contact, gmailActif, onChange, onFilModifie }: Props) {
+export default function MessageCard({ cvs, smtpActif, prospection, entreprise, contact, gmailActif, onChange, onFilModifie }: Props) {
   const [ouvert, setOuvert] = useState(prospection.statut === "a_valider");
   const [objet, setObjet] = useState(prospection.objet);
   const [corps, setCorps] = useState(prospection.corps);
@@ -48,6 +48,8 @@ export default function MessageCard({ cv, smtpActif, prospection, entreprise, co
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
 
+  // Le CV joint suit la langue du message.
+  const cv = cvs[prospection.langue];
   const modifiable = ["a_valider", "valide", "brouillon_gmail"].includes(prospection.statut);
   const modifie = objet !== prospection.objet || corps !== prospection.corps;
 
@@ -219,7 +221,9 @@ export default function MessageCard({ cv, smtpActif, prospection, entreprise, co
                       )}
                     </>
                   ) : (
-                    <span className="prospection-erreur">aucun CV enregistré — ajoute-le en haut de la page</span>
+                    <span className="prospection-erreur">
+                      aucun CV {prospection.langue === "en" ? "anglais" : "français"} enregistré — ajoute-le en haut de la page
+                    </span>
                   )}
                 </li>
               </ul>
