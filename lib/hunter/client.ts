@@ -34,13 +34,20 @@ async function appeler<T>(chemin: string, params: Record<string, string>): Promi
   return (await res.json()) as T;
 }
 
-// Hunter donne le pays de l'ENTREPRISE (code à deux lettres), pas celui de
-// chaque personne : il sert d'indice pour choisir la langue du message.
-export async function rechercherEmailsDomaine(
-  domaine: string,
-): Promise<{ emails: EmailHunter[]; pays: string | null }> {
+// Nom d'entreprise utilisable par Hunter : la raison sociale Sirene contient
+// parenthèses, formes juridiques et mots génériques qui gênent la recherche.
+export function nomPourHunter(raisonSociale: string): string {
+  return raisonSociale
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(SAS|SASU|SARL|SA|FRANCE|ENTREPRISE|EXPLOITATION|PRODUCTION|ELECTROMENAGER)\b/gi, " ")
+    .replace(/\.com\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function rechercherParametre(param: Record<string, string>) {
   const data = await appeler<{ data?: { emails?: EmailHunter[]; country?: string | null } }>("/domain-search", {
-    domain: domaine,
+    ...param,
     limit: "10",
     type: "personal",
     // L'offre gratuite ne renvoie que 10 adresses par recherche : on les
@@ -48,6 +55,21 @@ export async function rechercherEmailsDomaine(
     department: "marketing,sales,hr",
   });
   return { emails: data.data?.emails ?? [], pays: data.data?.country ?? null };
+}
+
+// Hunter donne le pays de l'ENTREPRISE (code à deux lettres), pas celui de
+// chaque personne : il sert d'indice pour choisir la langue du message. Le
+// domaine du site n'est pas toujours celui des adresses e-mail (groupe parent,
+// domaine dédié) : sans résultat, on retente avec le nom de l'entreprise. Une
+// recherche sans résultat ne consomme pas le quota.
+export async function rechercherEmailsDomaine(
+  domaine: string,
+  nomEntreprise?: string,
+): Promise<{ emails: EmailHunter[]; pays: string | null }> {
+  const parDomaine = await rechercherParametre({ domain: domaine });
+  if (parDomaine.emails.length > 0 || !nomEntreprise) return parDomaine;
+  const nom = nomPourHunter(nomEntreprise);
+  return nom.length >= 3 ? rechercherParametre({ company: nom }) : parDomaine;
 }
 
 export async function quotaHunter(): Promise<{ utilisees: number; disponibles: number } | null> {

@@ -148,6 +148,7 @@ export default function EntrepriseRow({
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de la recherche");
       for (const contact of data.contacts as ContactEntreprise[]) onContactAjoute(contact);
+      if (data.entreprise) onEntrepriseChange(data.entreprise as Entreprise);
       const quota = data.quota ? ` Il te reste ${data.quota.disponibles - data.quota.utilisees} recherche(s) ce mois-ci.` : "";
       setInfo(
         data.contacts.length > 0
@@ -253,11 +254,12 @@ export default function EntrepriseRow({
       // Hunter n'est interrogé que s'il manque un contact nominatif joignable :
       // chaque recherche consomme le quota mensuel gratuit.
       const domaine = courante.site_web ?? courante.fiche?.site_web;
-      if (hunterActif && domaine && !tous.some((c) => c.email && !c.generique)) {
+      if (hunterActif && domaine && !courante.fiche?.hunter_recherche_at && !tous.some((c) => c.email && !c.generique)) {
         setPreparation("Recherche de contacts (Hunter)...");
         const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/contacts-hunter`, { method: "POST" });
         const data = await res.json().catch(() => ({}));
         if (res.ok) {
+          if (data.entreprise) onEntrepriseChange(data.entreprise as Entreprise);
           for (const contact of data.contacts as ContactEntreprise[]) {
             onContactAjoute(contact);
             tous.push(contact);

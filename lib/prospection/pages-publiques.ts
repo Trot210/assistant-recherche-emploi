@@ -91,7 +91,7 @@ export function liensUtiles(html: string, base: URL): string[] {
   return [...urls];
 }
 
-async function telecharger(url: string): Promise<string | null> {
+export async function telecharger(url: string): Promise<string | null> {
   const cible = urlPublique(url);
   if (!cible) return null;
   try {

@@ -61,6 +61,16 @@ export const SECTEURS_CIBLES: SecteurCible[] = [
     codesNaf: ["70.22Z", "73.11Z", "73.20Z"],
   },
   {
+    id: "sante-grand-public",
+    libelle: "Santé grand public",
+    codesNaf: ["21.20Z", "46.46Z", "47.73Z"],
+  },
+  {
+    id: "maison-sport-loisirs",
+    libelle: "Équipement de la maison, sport et loisirs",
+    codesNaf: ["27.51Z", "46.43Z", "32.30Z", "32.40Z", "46.49Z"],
+  },
+  {
     id: "sieges",
     libelle: "Sièges de groupes (mot-clé requis)",
     codesNaf: ["70.10Z"],

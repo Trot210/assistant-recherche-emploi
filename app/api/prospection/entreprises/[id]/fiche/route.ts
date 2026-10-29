@@ -85,7 +85,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     const { data: misAJour, error: updateError } = await supabase
       .from("entreprises")
       .update({
-        fiche,
+        // Une nouvelle analyse remplace la fiche mais garde la trace d'une
+        // recherche Hunter déjà faite.
+        fiche: { ...fiche, hunter_recherche_at: entreprise.fiche?.hunter_recherche_at ?? null },
         fiche_generee_at: new Date().toISOString(),
         site_web: entreprise.site_web ?? fiche.site_web,
       })

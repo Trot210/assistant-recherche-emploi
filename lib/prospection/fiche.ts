@@ -126,3 +126,54 @@ export function resumerFiche(fiche: Fiche | null): string {
   ].filter(Boolean);
   return lignes.join("\n");
 }
+
+// Sites qui parlent d'une entreprise sans être le sien : annuaires, réseaux
+// sociaux, encyclopédies, sites d'emploi.
+const SITES_TIERS =
+  /(linkedin|facebook|instagram|twitter|youtube|tiktok|wikipedia|wikidata|pagesjaunes|societe\.com|infonet|pappers|verif\.com|manageo|kompass|indeed|glassdoor|welcometothejungle|francetravail|pole-emploi|apec|google|bing|amazon|lefigaro|lemonde|lesechos|capital\.fr|bfmtv|numerama|ouest-france)/i;
+
+const MOTS_VIDES = new Set([
+  "france", "sas", "sasu", "societe", "groupe", "entreprise", "abreviation", "exploitation", "production",
+  "distribution", "holding", "de", "du", "des", "la", "le", "les", "et", "par", "sa",
+]);
+
+function motsDuNom(nom: string): string[] {
+  return nom
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\(.*?\)/g, " ")
+    .split(/[^a-z0-9]+/)
+    .filter((m) => m.length >= 3 && !MOTS_VIDES.has(m));
+}
+
+// Choisit le site officiel parmi les liens renvoyés par la recherche : le
+// premier dont le nom de domaine reprend un mot du nom de l'entreprise,
+// en écartant annuaires et réseaux sociaux. Rien n'est jamais inventé : seule
+// une adresse réellement trouvée peut être retenue.
+export function choisirSiteDansResultats(urls: string[], nomEntreprise: string): string | null {
+  const mots = motsDuNom(nomEntreprise);
+  for (const brut of urls) {
+    if (SITES_TIERS.test(brut)) continue;
+    try {
+      const u = new URL(brut);
+      const etiquette = u.hostname.replace(/^www\./, "").split(".").slice(0, -1).join(".");
+      const parties = etiquette.split(/[-.]/);
+      const correspond = mots.some((m) => parties.includes(m) || (m.length >= 5 && etiquette.includes(m)));
+      if (correspond) return `${u.protocol}//${u.hostname}/`;
+    } catch {
+      /* lien invalide : ignoré */
+    }
+  }
+  return null;
+}
+
+// Vrai si le texte de la page contient un mot caractéristique du nom de
+// l'entreprise : sert à vérifier qu'une adresse proposée est bien son site.
+export function pageMentionne(html: string, nomEntreprise: string): boolean {
+  const texte = html
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return motsDuNom(nomEntreprise).some((mot) => new RegExp(`\\b${mot}\\b`).test(texte));
+}

@@ -11,6 +11,11 @@ const POSTES_PROCHES: Record<string, RegExp> = {
   Consultant: /consult|conseil/i,
 };
 
+// Un message spontané s'adresse à quelqu'un qui peut orienter une candidature :
+// un responsable ou un directeur, pas un poste de terrain ou d'assistance.
+const SENIOR = /director|directeur|directrice|head|chef|manager|responsable|vp|vice|lead/i;
+const JUNIOR = /supervisor|superviseur|assistant|junior|stagiaire|intern|coordinat|conseiller|technicien/i;
+
 const RECRUTEUR = /recrut|talent|\brh\b|\bhr\b|ressources humaines|human resources/i;
 const COMMERCIAL = /commerc|sales|vente|business develop/i;
 
@@ -21,6 +26,8 @@ function score(contact: ContactEntreprise, posteVise: string): number {
   if (RECRUTEUR.test(poste)) total += 2;
   if (COMMERCIAL.test(poste)) total += 1;
   if (!contact.generique) total += 0.5;
+  if (SENIOR.test(poste)) total += 1.5;
+  if (JUNIOR.test(poste)) total -= 2;
   return total;
 }
 

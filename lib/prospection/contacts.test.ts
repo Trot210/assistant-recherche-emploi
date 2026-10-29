@@ -43,4 +43,11 @@ describe("choisirMeilleurContact", () => {
     expect(choisirMeilleurContact([marketing, categorie], "Category Manager")?.id).toBe("c");
     expect(choisirMeilleurContact([categorie, marketing], "Trade Marketing")?.id).toBe("m");
   });
+
+  it("préfère un manager à un superviseur terrain quand le métier ne départage pas", () => {
+    const superviseur = contact({ id: "s", poste: "Sales Supervisor" });
+    const manager = contact({ id: "m", poste: "National Retail Sales Manager" });
+    expect(choisirMeilleurContact([superviseur, manager], "Chef de Produit")?.id).toBe("m");
+    expect(choisirMeilleurContact([manager, superviseur], "Chef de Produit")?.id).toBe("m");
+  });
 });

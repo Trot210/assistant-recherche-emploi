@@ -33,4 +33,7 @@ export interface Fiche {
   adresse_candidature: AdresseCandidature | null;
   contacts_publics: ContactPublic[];
   postes_suggeres: PosteSuggere[];
+  // Date de la dernière recherche Hunter pour cette entreprise : évite de
+  // relancer (et de consommer le quota) quand elle n'avait rien donné.
+  hunter_recherche_at?: string | null;
 }

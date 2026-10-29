@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq("entreprise_id", entreprise.id)
       .eq("user_id", user.id);
 
-    const { emails, pays } = await rechercherEmailsDomaine(domaine);
+    const { emails, pays } = await rechercherEmailsDomaine(domaine, entreprise.nom);
     const choisis = choisirContactsHunter(
       emails,
       (existants ?? []).map((c) => c.email).filter((e): e is string => Boolean(e)),
@@ -73,7 +73,22 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
         : { data: [], error: null };
     if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
 
+    // On note qu'une recherche a été faite (même sans résultat) pour ne pas
+    // consommer une deuxième fois le quota sur la même entreprise.
+    let misAJour = entreprise;
+    if (entreprise.fiche) {
+      const { data } = await supabase
+        .from("entreprises")
+        .update({ fiche: { ...entreprise.fiche, hunter_recherche_at: new Date().toISOString() } })
+        .eq("id", entreprise.id)
+        .eq("user_id", user.id)
+        .select()
+        .single();
+      if (data) misAJour = data;
+    }
+
     return NextResponse.json({
+      entreprise: misAJour,
       contacts,
       trouves: emails.length,
       quota: await quotaHunter(),

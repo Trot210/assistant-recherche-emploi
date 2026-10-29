@@ -2,10 +2,17 @@ import type Anthropic from "@anthropic-ai/sdk";
 import * as z from "zod/v4";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic } from "@/lib/anthropic/client";
-import { assainirFiche, extraireDomaine, type FicheBrute, type SourcesRecherche } from "@/lib/prospection/fiche";
+import {
+  assainirFiche,
+  choisirSiteDansResultats,
+  pageMentionne,
+  type FicheBrute,
+  type SourcesRecherche,
+} from "@/lib/prospection/fiche";
 import {
   choisirAdresseCandidature,
   lirePagesPubliques,
+  telecharger,
   urlPublique,
   type PageLue,
 } from "@/lib/prospection/pages-publiques";
@@ -56,13 +63,11 @@ function descriptionEntreprise(entreprise: Entreprise): string {
     .join("\n");
 }
 
-// Une seule recherche web, pour trouver le site officiel. Le lien retenu doit
-// figurer parmi les résultats réellement renvoyés par la recherche : un site
-// inventé par le modèle est refusé.
+// Une seule recherche web, pour trouver le site officiel.
 export async function trouverSiteOfficiel(entreprise: Entreprise): Promise<string | null> {
   const response = await anthropic.messages.create({
     model: MODELE,
-    max_tokens: 1500,
+    max_tokens: 2000,
     tools: [
       {
         type: "web_search_20260209",
@@ -74,7 +79,7 @@ export async function trouverSiteOfficiel(entreprise: Entreprise): Promise<strin
     messages: [
       {
         role: "user",
-        content: `Quel est le site officiel de l'enseigne ou du groupe commercial correspondant à cette entreprise ? Le nom est une raison sociale : cherche sous le nom sous lequel le public la connaît (par exemple « Monoprix » pour « MONOPRIX EXPLOITATION »). Ni annuaire, ni réseau social, ni Wikipédia.
+        content: `Quel est le site officiel de l'enseigne ou du groupe commercial correspondant à cette entreprise ? Le nom est une raison sociale : cherche sous le nom sous lequel le public la connaît (par exemple « Monoprix » pour « MONOPRIX EXPLOITATION »). Ni annuaire, ni réseau social, ni Wikipédia. Fais une recherche web avant de répondre, même si tu crois connaître le site.
 
 ${descriptionEntreprise(entreprise)}
 
@@ -83,22 +88,31 @@ Réponds uniquement par l'adresse de la page d'accueil (https://...), sans autre
     ],
   });
 
-  const resultats = new Set<string>();
-  let texte = "";
+  const liens: string[] = [];
   for (const block of response.content as Anthropic.ContentBlock[]) {
     if (block.type === "web_search_tool_result" && Array.isArray(block.content)) {
-      for (const r of block.content) {
-        const domaine = extraireDomaine(r.url);
-        if (domaine) resultats.add(domaine);
-      }
+      for (const r of block.content) liens.push(r.url);
     }
-    if (block.type === "text") texte += `${block.text}\n`;
   }
 
+  // Le site est choisi parmi les résultats réellement renvoyés : l'adresse que
+  // le modèle écrit en réponse est parfois devinée (ex. camparifrance.fr au
+  // lieu de campari.com) et n'est donc pas retenue telle quelle.
+  const parRecherche = choisirSiteDansResultats(liens, entreprise.nom);
+  if (parRecherche) return parRecherche;
+
+  // Sans résultat de recherche (le modèle a répondu de mémoire), l'adresse
+  // proposée n'est acceptée que si le site s'ouvre et mentionne l'entreprise.
+  const texte = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
   for (const candidat of texte.match(/https?:\/\/[^\s)<>"']+/g) ?? []) {
     const url = urlPublique(candidat);
-    const domaine = extraireDomaine(candidat);
-    if (url && domaine && resultats.has(domaine)) return `${url.protocol}//${url.hostname}/`;
+    if (!url) continue;
+    const accueil = `${url.protocol}//${url.hostname}/`;
+    const html = await telecharger(accueil);
+    if (html && pageMentionne(html, entreprise.nom)) return accueil;
   }
   return null;
 }

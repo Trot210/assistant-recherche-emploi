@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { assainirFiche, cleUrl, extraireDomaine, resumerFiche, type FicheBrute } from "@/lib/prospection/fiche";
+import {
+  assainirFiche,
+  choisirSiteDansResultats,
+  cleUrl,
+  extraireDomaine,
+  pageMentionne,
+  resumerFiche,
+  type FicheBrute,
+} from "@/lib/prospection/fiche";
 
 const sources = {
   urls: ["https://www.bel-group.com/fr/carrieres/", "https://presse.exemple.fr/article-1"],
@@ -114,5 +122,40 @@ describe("resumerFiche", () => {
     expect(resumerFiche(null)).toBe("");
     const fiche = assainirFiche(brute(), sources);
     expect(resumerFiche(fiche)).toContain("Marques : La vache qui rit");
+  });
+});
+
+describe("choisirSiteDansResultats", () => {
+  it("retient le site de l'entreprise et écarte annuaires et réseaux sociaux", () => {
+    const urls = [
+      "https://fr.linkedin.com/company/campari-france",
+      "https://www.pagesjaunes.fr/pros/64920220",
+      "https://www.societe.com/societe/campari-france-511042368.html",
+      "https://www.campari.com/fr-fr/nos-produits/",
+    ];
+    expect(choisirSiteDansResultats(urls, "CAMPARI FRANCE (CAMPARI FRANCE) (CF)")).toBe("https://www.campari.com/");
+  });
+
+  it("reconnaît un nom court dans un domaine composé et ignore les noms qui ne correspondent pas", () => {
+    expect(
+      choisirSiteDansResultats(["https://www.groupe-bel.com/fr/", "https://www.belle-vue.fr/"], "BEL (LA VACHE QUI RIT - FBSA) (F.B.S.A)"),
+    ).toBe("https://www.groupe-bel.com/");
+    expect(choisirSiteDansResultats(["https://www.autre-marque.fr/"], "LIDL (LIDL)")).toBeNull();
+  });
+
+  it("ne tient pas compte des mots génériques du nom", () => {
+    expect(choisirSiteDansResultats(["https://www.france-voyages.fr/"], "SOCIETE FRANCE SAS")).toBeNull();
+  });
+});
+
+describe("pageMentionne", () => {
+  it("reconnaît le nom de l'entreprise dans une page, sans tenir compte des accents ni de la casse", () => {
+    expect(pageMentionne("<title>Lidl France | Supermarché</title>", "LIDL (LIDL)")).toBe(true);
+    expect(pageMentionne("<title>Domaine à vendre</title>", "LIDL (LIDL)")).toBe(false);
+    expect(pageMentionne("<h1>CAUDALIE – cosmétique</h1>", "CAUDALIE (CAUDALIE)")).toBe(true);
+  });
+
+  it("ne confond pas un mot plus long avec le nom recherché", () => {
+    expect(pageMentionne("<p>Une belle journée</p>", "BEL (LA VACHE QUI RIT)")).toBe(false);
   });
 });
