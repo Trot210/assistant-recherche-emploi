@@ -1001,6 +1001,149 @@ select {
   width: 100%;
 }
 
+/* prospection (candidatures spontanées) */
+.prospection-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+.prospection-bloc {
+  border: 1px solid var(--line);
+  background: var(--card);
+  padding: 16px 18px;
+  margin-bottom: 18px;
+}
+.prospection-bloc h3 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 12px;
+}
+.prospection-form {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.prospection-liste {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.prospection-ligne {
+  border: 1px solid var(--line-soft);
+  border-left: 3px solid var(--line-soft);
+  background: var(--card);
+  padding: 12px 14px;
+}
+.prospection-ligne.due {
+  border-left-color: var(--amber);
+}
+.prospection-ligne.ok {
+  border-left-color: var(--emerald);
+}
+.prospection-ligne-tete {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+.prospection-titre {
+  font-weight: 600;
+  font-size: 14px;
+}
+.prospection-meta {
+  font-size: 12.5px;
+  color: var(--ink-soft);
+  margin-top: 2px;
+}
+.prospection-detail {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.prospection-detail label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.prospection-detail input[type="text"],
+.prospection-detail input[type="email"],
+.prospection-detail textarea,
+.prospection-form input[type="text"] {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+}
+.prospection-detail textarea {
+  resize: vertical;
+  min-height: 90px;
+  line-height: 1.5;
+}
+.prospection-corps {
+  min-height: 260px !important;
+}
+.prospection-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.prospection-contact {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.prospection-contact-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+}
+.prospection-alerte {
+  font-size: 12.5px;
+  color: var(--amber);
+  background: #fbefd4;
+  border: 1px solid var(--amber);
+  padding: 8px 12px;
+}
+.prospection-alerte ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.prospection-erreur {
+  font-size: 12.5px;
+  color: var(--brick);
+}
+.prospection-info {
+  font-size: 12.5px;
+  color: var(--emerald);
+}
+.prospection-link-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--navy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 @media (max-width: 640px) {
   h1 {
     font-size: 34px;

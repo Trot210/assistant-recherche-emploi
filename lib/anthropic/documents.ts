@@ -17,7 +17,7 @@ const MAX_MESSAGE_CHARS = 1800;
 // glisse parfois du markdown (gras, titres) qui s'affiche tel quel — en
 // astérisques littéraux — dans le PDF. Filet de sécurité plutôt que de
 // compter uniquement sur le prompt.
-function nettoyerMarkdown(texte: string): string {
+export function nettoyerMarkdown(texte: string): string {
   return texte
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/(?<!\w)\*(\S(?:.*?\S)?)\*(?!\w)/g, "$1")
@@ -290,7 +290,7 @@ const VerificationSchema = z.object({
     .describe("Liste des affirmations potentiellement inventées ou non vérifiables ; vide si aucune"),
 });
 
-async function verifierFidelite(
+export async function verifierFidelite(
   profil: Profil,
   offre: Offre,
   texteAVerifier: string,

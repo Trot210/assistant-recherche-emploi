@@ -9,6 +9,18 @@ export type CandidatureStatut =
   | "refusee"
   | "offre";
 
+export type EntrepriseStatut = "a_analyser" | "retenue" | "ecartee";
+
+export type ProspectionStatut =
+  | "a_valider"
+  | "valide"
+  | "brouillon_gmail"
+  | "envoyee"
+  | "reponse_recue"
+  | "sans_suite";
+
+export type ProspectionType = "initial" | "relance";
+
 export interface SousSection {
   titre: string;
   points: string[];
@@ -185,6 +197,139 @@ export interface Database {
             columns: ["offre_id"];
             isOneToOne: true;
             referencedRelation: "offres";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      entreprises: {
+        Row: {
+          id: string;
+          user_id: string;
+          siren: string;
+          nom: string;
+          code_naf: string | null;
+          secteur: string | null;
+          tranche_effectif: string | null;
+          adresse: string | null;
+          code_postal: string | null;
+          commune: string | null;
+          departement: string | null;
+          site_web: string | null;
+          notes: string | null;
+          statut: EntrepriseStatut;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          siren: string;
+          nom: string;
+          code_naf?: string | null;
+          secteur?: string | null;
+          tranche_effectif?: string | null;
+          adresse?: string | null;
+          code_postal?: string | null;
+          commune?: string | null;
+          departement?: string | null;
+          site_web?: string | null;
+          notes?: string | null;
+          statut?: EntrepriseStatut;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["entreprises"]["Insert"]>;
+        Relationships: [];
+      };
+      contacts: {
+        Row: {
+          id: string;
+          user_id: string;
+          entreprise_id: string;
+          nom: string;
+          poste: string | null;
+          email: string | null;
+          source_email: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          entreprise_id: string;
+          nom: string;
+          poste?: string | null;
+          email?: string | null;
+          source_email?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "contacts_entreprise_id_fkey";
+            columns: ["entreprise_id"];
+            isOneToOne: false;
+            referencedRelation: "entreprises";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      prospections: {
+        Row: {
+          id: string;
+          user_id: string;
+          entreprise_id: string;
+          contact_id: string | null;
+          parent_id: string | null;
+          type: ProspectionType;
+          poste_vise: string;
+          objet: string;
+          corps: string;
+          statut: ProspectionStatut;
+          avertissements: string[];
+          cv_path: string | null;
+          gmail_draft_id: string | null;
+          gmail_message_id: string | null;
+          gmail_thread_id: string | null;
+          date_envoi: string | null;
+          nb_relances: number;
+          prochaine_relance: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          entreprise_id: string;
+          contact_id?: string | null;
+          parent_id?: string | null;
+          type?: ProspectionType;
+          poste_vise: string;
+          objet: string;
+          corps: string;
+          statut?: ProspectionStatut;
+          avertissements?: string[];
+          cv_path?: string | null;
+          gmail_draft_id?: string | null;
+          gmail_message_id?: string | null;
+          gmail_thread_id?: string | null;
+          date_envoi?: string | null;
+          nb_relances?: number;
+          prochaine_relance?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["prospections"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "prospections_entreprise_id_fkey";
+            columns: ["entreprise_id"];
+            isOneToOne: false;
+            referencedRelation: "entreprises";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "prospections_contact_id_fkey";
+            columns: ["contact_id"];
+            isOneToOne: false;
+            referencedRelation: "contacts";
             referencedColumns: ["id"];
           },
         ];

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { OffreAvecDetails } from "@/types/dashboard";
@@ -486,6 +487,9 @@ export default function Dashboard() {
           <button className="action-btn" onClick={() => setInsightsOuvert(true)}>
             Insights
           </button>
+          <Link href="/prospection" className="action-btn">
+            Prospection
+          </Link>
           <button className="action-btn" onClick={deconnexion}>
             Déconnexion
           </button>
