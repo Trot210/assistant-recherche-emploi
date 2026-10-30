@@ -64,6 +64,10 @@ export async function lireReponsesCandidates(params: ParametresLecture): Promise
     secure: true,
     auth: { user, pass },
     logger: false,
+    // Sans ces délais, une boîte qui ne répond pas bloquerait la requête pendant plus d'une minute.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 40_000,
   });
 
   const trouvees = new Map<string, ReponseBrute>();
@@ -141,6 +145,10 @@ export async function lireRebonds(params: ParametresRebonds): Promise<RebondBrut
     secure: true,
     auth: { user, pass },
     logger: false,
+    // Sans ces délais, une boîte qui ne répond pas bloquerait la requête pendant plus d'une minute.
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 40_000,
   });
 
   const trouves = new Map<string, RebondBrut>();

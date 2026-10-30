@@ -16,9 +16,11 @@ import EmployeursQuiRecrutent from "./EmployeursQuiRecrutent";
 import MessageEnvoye from "./MessageEnvoye";
 import ReponsesPanel from "./ReponsesPanel";
 import CoutClaude from "@/components/CoutClaude";
+import { calculerPriorite, type Priorite } from "@/lib/prospection/priorite";
 
 export type Onglet = "entreprises" | "messages" | "relances";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
+type TriEntreprises = "recentes" | "priorite";
 
 interface Props {
   userId: string;
@@ -43,6 +45,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [voirEcartees, setVoirEcartees] = useState(false);
+  const [tri, setTri] = useState<TriEntreprises>("recentes");
   const [relanceEnCours, setRelanceEnCours] = useState<string | null>(null);
   const [cvs, setCvs] = useState<Record<Langue, CvInfo | null>>({ fr: null, en: null });
 
@@ -80,7 +83,25 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   // les compteurs.
   const entreprisesActives = useMemo(() => entreprises.filter((e) => e.statut !== "ecartee"), [entreprises]);
   const entreprisesEcartees = useMemo(() => entreprises.filter((e) => e.statut === "ecartee"), [entreprises]);
-  const entreprisesAffichees = voirEcartees && entreprisesEcartees.length > 0 ? entreprisesEcartees : entreprisesActives;
+  // Note de priorité de chaque entreprise (règles simples, voir lib/prospection/priorite.ts).
+  const priorites = useMemo(() => {
+    const parEntreprise = new Map<string, Priorite>();
+    for (const e of entreprises) {
+      parEntreprise.set(
+        e.id,
+        calculerPriorite({
+          entreprise: e,
+          contacts: contacts.filter((c) => c.entreprise_id === e.id),
+          nbMessages: prospections.filter((p) => p.entreprise_id === e.id).length,
+        }),
+      );
+    }
+    return parEntreprise;
+  }, [entreprises, contacts, prospections]);
+  const entreprisesAffichees = useMemo(() => {
+    const liste = voirEcartees && entreprisesEcartees.length > 0 ? entreprisesEcartees : entreprisesActives;
+    return tri === "priorite" ? [...liste].sort((a, b) => (priorites.get(b.id)?.score ?? 0) - (priorites.get(a.id)?.score ?? 0)) : liste;
+  }, [voirEcartees, entreprisesEcartees, entreprisesActives, tri, priorites]);
   const entrepriseParId = useMemo(() => new Map(entreprises.map((e) => [e.id, e])), [entreprises]);
   const contactParId = useMemo(() => new Map(contacts.map((c) => [c.id, c])), [contacts]);
 
@@ -242,6 +263,15 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             }
           />
           <div className="prospection-liste">
+            <div className="chip-row">
+              <span className="filter-group-label">Ordre</span>
+              <button className={`chip${tri === "recentes" ? " active" : ""}`} onClick={() => setTri("recentes")}>
+                Plus récentes
+              </button>
+              <button className={`chip${tri === "priorite" ? " active" : ""}`} onClick={() => setTri("priorite")}>
+                Priorité
+              </button>
+            </div>
             {entreprisesEcartees.length > 0 && (
               <div className="chip-row">
                 <button className={`chip${!voirEcartees ? " active" : ""}`} onClick={() => setVoirEcartees(false)}>
@@ -264,6 +294,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                 userId={userId}
                 hunterActif={hunterActif}
                 entreprise={entreprise}
+                priorite={priorites.get(entreprise.id)}
                 contacts={contacts.filter((c) => c.entreprise_id === entreprise.id)}
                 nbMessages={nbParEntreprise.get(entreprise.id) ?? 0}
                 messages={prospections.filter((p) => p.entreprise_id === entreprise.id)}

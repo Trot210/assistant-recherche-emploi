@@ -6,7 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { formaterDateFr } from "@/lib/prospection/dates";
 import { offrePertinente } from "@/lib/prospection/offres";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
-import type { Entreprise, Prospection } from "@/types/prospection";
+import { calculerPriorite, resumerPriorite } from "@/lib/prospection/priorite";
+import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
+import Automatisation from "@/components/Automatisation";
 import CoutClaude from "@/components/CoutClaude";
 import ReponsesPanel from "@/components/prospection/ReponsesPanel";
 
@@ -27,22 +29,25 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
   const supabase = useMemo(() => createClient(), []);
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [prospections, setProspections] = useState<Prospection[]>([]);
+  const [contacts, setContacts] = useState<ContactEntreprise[]>([]);
   const [nouvellesOffres, setNouvellesOffres] = useState<number | null>(null);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     const depuis = new Date(Date.now() - JOURS_NOUVELLES_OFFRES * 86_400_000).toISOString();
-    const [e, p, o] = await Promise.all([
+    const [e, p, o, c] = await Promise.all([
       supabase.from("entreprises").select(),
       supabase.from("prospections").select().order("created_at", { ascending: false }),
       supabase.from("offres").select("titre").gte("created_at", depuis).limit(1000),
+      supabase.from("contacts").select(),
     ]);
     const echec = e.error ?? p.error;
     if (echec) setErreur(echec.message);
     else {
       setEntreprises(e.data ?? []);
       setProspections(p.data ?? []);
+      setContacts(c.data ?? []);
     }
     setNouvellesOffres(o.error ? null : (o.data ?? []).filter((x) => offrePertinente(x.titre)).length);
     setChargement(false);
@@ -63,6 +68,20 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
     .sort((a, b) => ((a.prochaine_action_date ?? "") < (b.prochaine_action_date ?? "") ? -1 : 1));
   const avecMessage = new Set(prospections.map((p) => p.entreprise_id));
   const sansMessage = entreprises.filter((e) => e.statut !== "ecartee" && !avecMessage.has(e.id));
+
+  // Les entreprises à écrire en premier : les mieux notées, pas encore contactées.
+  const prioritaires = entreprises
+    .map((e) => ({
+      entreprise: e,
+      priorite: calculerPriorite({
+        entreprise: e,
+        contacts: contacts.filter((c) => c.entreprise_id === e.id),
+        nbMessages: prospections.filter((p) => p.entreprise_id === e.id).length,
+      }),
+    }))
+    .filter((x) => !x.priorite.exclue && x.priorite.score >= 40)
+    .sort((a, b) => b.priorite.score - a.priorite.score)
+    .slice(0, 3);
 
   const rien =
     !chargement && aValider.length === 0 && relancesDues.length === 0 && actions.length === 0 && !(nouvellesOffres && nouvellesOffres > 0);
@@ -176,6 +195,25 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
         </div>
       )}
 
+      {prioritaires.length > 0 && (
+        <div className="prospection-bloc" style={{ marginTop: 18 }}>
+          <h3>À écrire en premier</h3>
+          <div className="prospection-liste">
+            {prioritaires.map(({ entreprise, priorite }) => (
+              <div key={entreprise.id} className="prospection-ligne">
+                <div className="prospection-titre">
+                  {entreprise.nom} — priorité {priorite.score}/100
+                </div>
+                <div className="prospection-meta">{resumerPriorite(priorite)}</div>
+              </div>
+            ))}
+          </div>
+          <Link href="/prospection?onglet=entreprises" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
+            Ouvrir les entreprises
+          </Link>
+        </div>
+      )}
+
       {sansMessage.length > 0 && (
         <div className="prospection-bloc" style={{ marginTop: 18 }}>
           <h3>Entreprises sans message ({sansMessage.length})</h3>
@@ -191,6 +229,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
           </Link>
         </div>
       )}
+      <Automatisation />
     </div>
   );
 }

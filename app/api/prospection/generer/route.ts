@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { genererMessageSpontane, genererRelance } from "@/lib/anthropic/prospection";
-import { estEnCours, MAX_RELANCES } from "@/lib/prospection/workflow";
+import { genererMessageSpontane } from "@/lib/anthropic/prospection";
+import { preparerRelance } from "@/lib/prospection/preparer-relance";
 import { suggererLangueContact } from "@/lib/prospection/langue";
-import { blocageContact, blocageEntreprise, premierBlocage } from "@/lib/prospection/politique";
+import { premierBlocage } from "@/lib/prospection/politique";
 import type { Langue } from "@/types/database.types";
 import { ouvrirUsage } from "@/lib/anthropic/usage";
 
@@ -47,71 +47,11 @@ export async function POST(request: Request) {
 
   try {
     if (estRelance) {
-      const { data: initial, error } = await supabase
-        .from("prospections")
-        .select()
-        .eq("id", parentId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      if (!initial || initial.type !== "initial") {
-        return NextResponse.json({ error: "Message initial introuvable" }, { status: 404 });
+      const resultat = await preparerRelance(supabase, user.id, parentId, profil);
+      if ("erreur" in resultat) {
+        return NextResponse.json({ error: resultat.erreur, code: resultat.code }, { status: resultat.statut });
       }
-      if (initial.statut !== "envoyee") {
-        return NextResponse.json({ error: "Seul un message envoyé sans réponse peut être relancé" }, { status: 409 });
-      }
-      if (initial.nb_relances >= MAX_RELANCES) {
-        return NextResponse.json({ error: `Déjà ${MAX_RELANCES} relances envoyées` }, { status: 409 });
-      }
-
-      const { data: enCours } = await supabase
-        .from("prospections")
-        .select("id, statut")
-        .eq("parent_id", initial.id)
-        .eq("user_id", user.id);
-      if ((enCours ?? []).some((r) => estEnCours(r.statut))) {
-        return NextResponse.json({ error: "Une relance est déjà en préparation pour ce message" }, { status: 409 });
-      }
-
-      const [{ data: entreprise }, { data: contact }] = await Promise.all([
-        supabase.from("entreprises").select().eq("id", initial.entreprise_id).eq("user_id", user.id).single(),
-        initial.contact_id
-          ? supabase.from("contacts").select().eq("id", initial.contact_id).eq("user_id", user.id).maybeSingle()
-          : Promise.resolve({ data: null }),
-      ]);
-      if (!entreprise) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
-
-      // Une relance ne s'adresse pas à qui a demandé à ne plus être contacté.
-      const interdit = [blocageContact(contact), blocageEntreprise(entreprise)].find((b) => b?.niveau === "interdit");
-      if (interdit) return NextResponse.json({ error: interdit.raison, code: "bloque" }, { status: 409 });
-
-      const genere = await genererRelance({
-        profil,
-        entreprise,
-        contact,
-        initial,
-        numero: initial.nb_relances + 1,
-      });
-
-      const { data: prospection, error: insertError } = await supabase
-        .from("prospections")
-        .insert({
-          user_id: user.id,
-          entreprise_id: initial.entreprise_id,
-          contact_id: initial.contact_id,
-          parent_id: initial.id,
-          type: "relance",
-          poste_vise: initial.poste_vise,
-          langue: initial.langue,
-          gmail_thread_id: initial.gmail_thread_id,
-          ...genere,
-        })
-        .select()
-        .single();
-
-      if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
-      return NextResponse.json({ prospection });
+      return NextResponse.json({ prospection: resultat.prospection });
     }
 
     const entrepriseId: unknown = body?.entreprise_id;

@@ -13,6 +13,7 @@ import FicheEntreprise from "./FicheEntreprise";
 import OffresEntreprise from "./OffresEntreprise";
 import TrouverAdresse from "./TrouverAdresse";
 import { libelleVerification } from "@/lib/hunter/verification";
+import { resumerPriorite, type Priorite } from "@/lib/prospection/priorite";
 import Confirmation from "./Confirmation";
 import {
   bilanEntreprise,
@@ -25,6 +26,7 @@ interface Props {
   userId: string;
   hunterActif: boolean;
   entreprise: Entreprise;
+  priorite?: Priorite;
   contacts: ContactEntreprise[];
   nbMessages: number;
   // Tous les messages de cette entreprise : ils déterminent ce que la suppression conserve.
@@ -63,6 +65,7 @@ export default function EntrepriseRow({
   userId,
   hunterActif,
   entreprise,
+  priorite,
   contacts,
   nbMessages,
   messages,
@@ -478,6 +481,11 @@ export default function EntrepriseRow({
               .join(" · ")}
             {nbMessages > 0 && ` · ${nbMessages} message(s)`}
           </div>
+          {priorite && !priorite.exclue && (
+            <div className="prospection-meta" title={resumerPriorite(priorite)}>
+              Priorité {priorite.score}/100 — {resumerPriorite(priorite)}
+            </div>
+          )}
         </div>
         <div className="prospection-actions">
           <select

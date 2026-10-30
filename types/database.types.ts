@@ -461,11 +461,17 @@ export interface Database {
         Row: {
           user_id: string;
           plafond_claude_usd: number;
+          relances_auto: boolean;
+          recap_actif: boolean;
+          dernier_traitement: string | null;
           updated_at: string;
         };
         Insert: {
           user_id: string;
           plafond_claude_usd?: number;
+          relances_auto?: boolean;
+          recap_actif?: boolean;
+          dernier_traitement?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["reglages"]["Insert"]>;

@@ -1,0 +1,33 @@
+name: Traitement quotidien
+
+on:
+  schedule:
+    # Une fois par jour, vers 6 h (heure de Paris en hiver, 7 h en été). GitHub
+    # peut retarder l'exécution de quelques minutes en cas de forte charge.
+    - cron: "15 5 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  quotidien:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher /api/cron/quotidien
+        env:
+          SYNC_URL: ${{ secrets.SYNC_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          # Même adresse de base et même secret que la synchronisation des offres :
+          # aucune nouvelle variable à créer.
+          case "$SYNC_URL" in
+            */api/offres/sync) ;;
+            *) echo "SYNC_URL doit se terminer par /api/offres/sync" >&2; exit 1 ;;
+          esac
+          curl -sS -X POST "${SYNC_URL%/api/offres/sync}/api/cron/quotidien" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --fail-with-body
+
+      # Le traitement ne fait que préparer des brouillons de relance, compter les
+      # nouvelles réponses et t'envoyer un récapitulatif à toi seul : aucun message
+      # ne part vers une entreprise sans ton clic de validation.
