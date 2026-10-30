@@ -101,6 +101,24 @@ describe("construireRecap", () => {
     expect(r.texte).toContain("(plafond atteint)");
   });
 
+  it("annonce les envois programmés du jour et traite un envoi échoué comme une chose à faire", () => {
+    const seul = construireRecap(donnees({ envoisDuJour: [{ entreprise: "Bel", heure: "09:30" }] }));
+    // Un envoi programmé n'appelle aucune action : pas d'e-mail s'il n'y a que cela.
+    expect(seul).toBeNull();
+
+    const r = construireRecap(
+      donnees({
+        envoisDuJour: [{ entreprise: "Bel", heure: "09:30" }],
+        envoisEchoues: [{ entreprise: "Monoprix", raison: "Aucun CV en français" }],
+      }),
+    )!;
+    expect(r.nbActions).toBe(1);
+    expect(r.texte).toContain("ENVOIS PROGRAMMÉS ÉCHOUÉS (1)");
+    expect(r.texte).toContain("- Monoprix : Aucun CV en français");
+    expect(r.texte).toContain("ENVOIS PROGRAMMÉS AUJOURD'HUI (1)");
+    expect(r.texte).toContain("- 09:30 : Bel");
+  });
+
   it("signale une lecture de la boîte mail impossible sans la compter comme une réponse", () => {
     const r = construireRecap(donnees({ reponsesIndisponibles: true, aValider: [{ entreprise: "Bel", poste: "Chef de Produit", relance: false }] }))!;
     expect(r.texte).toContain("La lecture de ta boîte mail n'a pas abouti");

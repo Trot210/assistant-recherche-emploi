@@ -12,6 +12,7 @@ import { calculerPriorite } from "@/lib/prospection/priorite";
 import { MAX_RELANCES_PAR_JOUR, relancesAPreparer } from "@/lib/prospection/quotidien";
 import { construireRecap, type DonneesRecap } from "@/lib/prospection/recap";
 import { critereRecherche, estExpediteurAutomatique, rapprocher, type CritereRecherche, type EnvoiConnu } from "@/lib/prospection/reponses";
+import { decomposerParis, parisVersUtc } from "@/lib/prospection/planification";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import type { Database } from "@/types/database.types";
 
@@ -176,6 +177,28 @@ export async function POST(request: Request) {
   const hier = new Date(Date.now() - 26 * 3_600_000).toISOString();
   const { data: offresRecentes } = await supabase.from("offres").select("titre").eq("user_id", userId).gte("created_at", hier).limit(1000);
 
+  // Envois programmés : ceux du jour (information) et les échecs récents (à traiter).
+  const debutJour = parisVersUtc(aujourdhui, "00:00");
+  const finJour = new Date(debutJour.getTime() + 86_400_000);
+  const { data: envoisDuJour } = await supabase
+    .from("envois_programmes")
+    .select("prospection_id, prevu_at")
+    .eq("user_id", userId)
+    .eq("statut", "programme")
+    .gte("prevu_at", debutJour.toISOString())
+    .lt("prevu_at", finJour.toISOString())
+    .order("prevu_at");
+  const { data: envoisEchoues } = await supabase
+    .from("envois_programmes")
+    .select("prospection_id, erreur")
+    .eq("user_id", userId)
+    .eq("statut", "echec")
+    .gte("termine_at", new Date(Date.now() - 26 * 3_600_000).toISOString());
+  const entrepriseDe = (prospectionId: string) => {
+    const p = etat.find((x) => x.id === prospectionId);
+    return p ? (nomEntreprise.get(p.entreprise_id) ?? "Entreprise") : "Entreprise";
+  };
+
   const bilan = await lireBilanUsage(supabase, userId).catch(() => null);
   const quotaHunter = hunterConfigure() ? await lireQuotaHunter().catch(() => null) : null;
 
@@ -207,6 +230,8 @@ export async function POST(request: Request) {
     actionsDuJour: etat
       .filter((p) => p.type === "initial" && p.prochaine_action && p.prochaine_action_date && p.prochaine_action_date <= aujourdhui)
       .map((p) => ({ entreprise: nomEntreprise.get(p.entreprise_id) ?? "Entreprise", action: p.prochaine_action as string, date: p.prochaine_action_date })),
+    envoisDuJour: (envoisDuJour ?? []).map((e) => ({ entreprise: entrepriseDe(e.prospection_id), heure: decomposerParis(new Date(e.prevu_at)).heure })),
+    envoisEchoues: (envoisEchoues ?? []).map((e) => ({ entreprise: entrepriseDe(e.prospection_id), raison: e.erreur ?? "raison inconnue" })),
     nouvellesOffres: (offresRecentes ?? []).filter((o) => offrePertinente(o.titre)).length,
     prioritaires: prioritaires.map((x) => ({
       nom: x.nom,

@@ -6,7 +6,7 @@ import { hunterConfigure } from "@/lib/hunter/client";
 import { imapConfigure } from "@/lib/mail/imap";
 import { smtpConfigure } from "@/lib/mail/smtp";
 
-const ONGLETS: Onglet[] = ["entreprises", "messages", "relances"];
+const ONGLETS: Onglet[] = ["entreprises", "messages", "relances", "programmes"];
 
 export default async function ProspectionPage({ searchParams }: { searchParams: Promise<{ onglet?: string }> }) {
   const { onglet } = await searchParams;

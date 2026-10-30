@@ -7,7 +7,8 @@ import { formaterDateFr } from "@/lib/prospection/dates";
 import { offrePertinente } from "@/lib/prospection/offres";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import { calculerPriorite, resumerPriorite } from "@/lib/prospection/priorite";
-import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
+import { formaterProgrammation } from "@/lib/prospection/planification";
+import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
 import Automatisation from "@/components/Automatisation";
 import CoutClaude from "@/components/CoutClaude";
 import ReponsesPanel from "@/components/prospection/ReponsesPanel";
@@ -30,17 +31,19 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [prospections, setProspections] = useState<Prospection[]>([]);
   const [contacts, setContacts] = useState<ContactEntreprise[]>([]);
+  const [envois, setEnvois] = useState<EnvoiProgramme[]>([]);
   const [nouvellesOffres, setNouvellesOffres] = useState<number | null>(null);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
 
   const charger = useCallback(async () => {
     const depuis = new Date(Date.now() - JOURS_NOUVELLES_OFFRES * 86_400_000).toISOString();
-    const [e, p, o, c] = await Promise.all([
+    const [e, p, o, c, ep] = await Promise.all([
       supabase.from("entreprises").select(),
       supabase.from("prospections").select().order("created_at", { ascending: false }),
       supabase.from("offres").select("titre").gte("created_at", depuis).limit(1000),
       supabase.from("contacts").select(),
+      supabase.from("envois_programmes").select().in("statut", ["programme", "en_cours", "echec"]).order("prevu_at"),
     ]);
     const echec = e.error ?? p.error;
     if (echec) setErreur(echec.message);
@@ -48,6 +51,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
       setEntreprises(e.data ?? []);
       setProspections(p.data ?? []);
       setContacts(c.data ?? []);
+      setEnvois(ep.error ? [] : (ep.data ?? []));
     }
     setNouvellesOffres(o.error ? null : (o.data ?? []).filter((x) => offrePertinente(x.titre)).length);
     setChargement(false);
@@ -82,6 +86,13 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
     .filter((x) => !x.priorite.exclue && x.priorite.score >= 40)
     .sort((a, b) => b.priorite.score - a.priorite.score)
     .slice(0, 3);
+
+  const envoisAVenir = envois.filter((x) => x.statut === "programme" || x.statut === "en_cours");
+  const envoisEchoues = envois.filter((x) => x.statut === "echec");
+  const nomEnvoi = (x: EnvoiProgramme) => {
+    const p = prospections.find((y) => y.id === x.prospection_id);
+    return p ? `${nomEntreprise.get(p.entreprise_id) ?? "Entreprise"} — ${p.poste_vise}` : "Message";
+  };
 
   const rien =
     !chargement && aValider.length === 0 && relancesDues.length === 0 && actions.length === 0 && !(nouvellesOffres && nouvellesOffres > 0);
@@ -152,6 +163,40 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
           </div>
           <Link href="/prospection?onglet=relances" className="action-btn primary" style={{ marginTop: 10, display: "inline-block" }}>
             Préparer les relances
+          </Link>
+        </div>
+      )}
+
+      {envoisEchoues.length > 0 && (
+        <div className="prospection-bloc">
+          <h3>Envois programmés échoués ({envoisEchoues.length})</h3>
+          <div className="prospection-liste">
+            {envoisEchoues.map((x) => (
+              <div key={x.id} className="prospection-ligne due">
+                <div className="prospection-titre">{nomEnvoi(x)}</div>
+                <div className="prospection-erreur">{x.erreur ?? "Raison inconnue"}</div>
+              </div>
+            ))}
+          </div>
+          <Link href="/prospection?onglet=programmes" className="action-btn primary" style={{ marginTop: 10, display: "inline-block" }}>
+            Voir les envois programmés
+          </Link>
+        </div>
+      )}
+
+      {envoisAVenir.length > 0 && (
+        <div className="prospection-bloc">
+          <h3>Envois programmés ({envoisAVenir.length})</h3>
+          <div className="prospection-liste">
+            {envoisAVenir.slice(0, MAX_LIGNES).map((x) => (
+              <div key={x.id} className="prospection-ligne">
+                <div className="prospection-titre">{nomEnvoi(x)}</div>
+                <div className="prospection-meta">{formaterProgrammation(new Date(x.prevu_at))}</div>
+              </div>
+            ))}
+          </div>
+          <Link href="/prospection?onglet=programmes" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
+            Gérer les envois programmés
           </Link>
         </div>
       )}

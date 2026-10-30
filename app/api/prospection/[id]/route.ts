@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { cloturerProgrammations } from "@/lib/prospection/programmations";
 import { peutSupprimerMessage } from "@/lib/prospection/suppression";
 import {
   appliquerAction,
@@ -71,6 +72,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
+    // Marqué envoyé, répondu ou sans suite à la main : l'envoi programmé n'a plus lieu d'être.
+    if (action !== "valider") await cloturerProgrammations(supabase, user.id, prospection.id, "Message traité à la main");
+
     const idInitial = prospection.parent_id ?? prospection.id;
     if (transition.parent && parent) {
       await supabase
@@ -107,6 +111,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
 
   const modifie = nouvelObjet !== prospection.objet || nouveauCorps !== prospection.corps;
+  // Un texte modifié repasse par la validation : l'envoi programmé n'est plus valable.
+  if (modifie) await cloturerProgrammations(supabase, user.id, prospection.id, "Message modifié : à revalider, puis reprogrammer");
 
   const { data: misAJour, error: updateError } = await supabase
     .from("prospections")

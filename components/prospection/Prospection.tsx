@@ -7,18 +7,19 @@ import { formaterDateFr } from "@/lib/prospection/dates";
 import { estEnvoye } from "@/lib/prospection/suppression";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
-import type { ContactEntreprise, Entreprise, Prospection as ProspectionRow } from "@/types/prospection";
+import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection as ProspectionRow } from "@/types/prospection";
 import RechercheEntreprises from "./RechercheEntreprises";
 import EntrepriseRow from "./EntrepriseRow";
 import MessageCard, { type CvInfo } from "./MessageCard";
 import CvReference from "./CvReference";
 import EmployeursQuiRecrutent from "./EmployeursQuiRecrutent";
+import EnvoisProgrammes from "./EnvoisProgrammes";
 import MessageEnvoye from "./MessageEnvoye";
 import ReponsesPanel from "./ReponsesPanel";
 import CoutClaude from "@/components/CoutClaude";
 import { calculerPriorite, type Priorite } from "@/lib/prospection/priorite";
 
-export type Onglet = "entreprises" | "messages" | "relances";
+export type Onglet = "entreprises" | "messages" | "relances" | "programmes";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
 type TriEntreprises = "recentes" | "priorite";
 
@@ -42,6 +43,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [contacts, setContacts] = useState<ContactEntreprise[]>([]);
   const [prospections, setProspections] = useState<ProspectionRow[]>([]);
+  const [envois, setEnvois] = useState<EnvoiProgramme[]>([]);
   const [chargement, setChargement] = useState(true);
   const [erreur, setErreur] = useState<string | null>(null);
   const [voirEcartees, setVoirEcartees] = useState(false);
@@ -50,11 +52,13 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   const [cvs, setCvs] = useState<Record<Langue, CvInfo | null>>({ fr: null, en: null });
 
   const charger = useCallback(async () => {
-    const [e, c, p] = await Promise.all([
+    const [e, c, p, ep] = await Promise.all([
       supabase.from("entreprises").select().order("created_at", { ascending: false }),
       supabase.from("contacts").select(),
       supabase.from("prospections").select().order("created_at", { ascending: false }),
+      supabase.from("envois_programmes").select().order("prevu_at", { ascending: true }),
     ]);
+    // La table des envois programmés peut manquer tant que la migration 0020 n'est pas appliquée.
     const echec = e.error ?? c.error ?? p.error;
     if (echec) {
       setErreur(echec.message);
@@ -62,6 +66,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
       setEntreprises(e.data ?? []);
       setContacts(c.data ?? []);
       setProspections(p.data ?? []);
+      setEnvois(ep.error ? [] : (ep.data ?? []));
     }
     setChargement(false);
   }, [supabase]);
@@ -240,6 +245,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             ["entreprises", `Entreprises (${entreprisesActives.length})`],
             ["messages", `Messages (${stats.aTraiter} en cours)`],
             ["relances", `Relances (${stats.relancesDues} dues)`],
+            ["programmes", `Programmés (${envois.filter((x) => x.statut === "programme" || x.statut === "en_cours").length})`],
           ] as [Onglet, string][]
         ).map(([id, libelle]) => (
           <button key={id} className={`chip${onglet === id ? " active" : ""}`} onClick={() => setOnglet(id)}>
@@ -353,6 +359,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                   onFilModifie={charger}
                   nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
                   onSupprime={retirerMessages}
+                  programmation={envois.find((x) => x.prospection_id === p.id && (x.statut === "programme" || x.statut === "en_cours"))}
+                  onVoirProgrammes={() => setOnglet("programmes")}
                 />
               ))}
 
@@ -376,6 +384,10 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
               ))}
           </div>
         </>
+      )}
+
+      {!chargement && onglet === "programmes" && (
+        <EnvoisProgrammes envois={envois} prospections={prospections} entreprises={entreprises} contacts={contacts} onChange={charger} />
       )}
 
       {!chargement && onglet === "relances" && actionsPrevues.length > 0 && (

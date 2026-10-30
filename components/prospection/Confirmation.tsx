@@ -15,11 +15,13 @@ interface Props {
   enCours: boolean;
   erreur: string | null;
   onAnnuler: () => void;
+  // Texte du bouton pendant l'action (par défaut « Suppression... »).
+  libelleEnCours?: string;
 }
 
 // Confirmation en ligne, dans la carte concernée : le texte dit exactement ce
 // qui sera supprimé et ce qui est conservé avant tout clic irréversible.
-export default function Confirmation({ texte, actions, enCours, erreur, onAnnuler }: Props) {
+export default function Confirmation({ texte, actions, enCours, erreur, onAnnuler, libelleEnCours = "Suppression..." }: Props) {
   return (
     <div className="prospection-confirmation" role="alertdialog" aria-live="polite">
       {texte && <p>{texte}</p>}
@@ -27,7 +29,7 @@ export default function Confirmation({ texte, actions, enCours, erreur, onAnnule
         <div key={a.libelle} className="prospection-confirmation-choix">
           {a.explication && <p>{a.explication}</p>}
           <button className={`action-btn${a.danger ? " danger" : ""}`} onClick={a.onClick} disabled={enCours}>
-            {enCours ? "Suppression..." : a.libelle}
+            {enCours ? libelleEnCours : a.libelle}
           </button>
         </div>
       ))}

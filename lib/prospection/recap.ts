@@ -16,6 +16,9 @@ export interface DonneesRecap {
   // La boîte mail n'a pas pu être lue ce matin (erreur ou délai dépassé).
   reponsesIndisponibles?: boolean;
   actionsDuJour: { entreprise: string; action: string; date: string | null }[];
+  // Envois programmés prévus aujourd'hui (information) et envois programmés échoués (à traiter).
+  envoisDuJour?: { entreprise: string; heure: string }[];
+  envoisEchoues?: { entreprise: string; raison: string }[];
   nouvellesOffres: number;
   prioritaires: { nom: string; score: number; resume: string }[];
   coutMoisUsd: number | null;
@@ -37,7 +40,11 @@ function pluriel(n: number, singulier: string, pluriel: string): string {
 
 export function construireRecap(d: DonneesRecap): Recap | null {
   const nbActions =
-    d.aValider.length + d.relancesRestantes.length + (d.nouvellesReponses > 0 ? 1 : 0) + d.actionsDuJour.length;
+    d.aValider.length +
+    d.relancesRestantes.length +
+    (d.nouvellesReponses > 0 ? 1 : 0) +
+    d.actionsDuJour.length +
+    (d.envoisEchoues?.length ?? 0);
   // Les relances déjà préparées sont aussi à valider : elles figurent dans aValider.
   if (nbActions === 0) return null;
 
@@ -64,6 +71,16 @@ export function construireRecap(d: DonneesRecap): Recap | null {
     blocs.push(
       `RELANCES DUES NON PRÉPARÉES (${d.relancesRestantes.length})\n${d.relancesRestantes.map((r) => `- ${r.entreprise} — ${r.poste} (${r.raison})`).join("\n")}`,
     );
+  }
+
+  if (d.envoisEchoues && d.envoisEchoues.length > 0) {
+    blocs.push(
+      `ENVOIS PROGRAMMÉS ÉCHOUÉS (${d.envoisEchoues.length})\nCes messages ne sont pas partis : corrige le problème puis reprogramme-les.\n${d.envoisEchoues.map((e) => `- ${e.entreprise} : ${e.raison}`).join("\n")}`,
+    );
+  }
+
+  if (d.envoisDuJour && d.envoisDuJour.length > 0) {
+    blocs.push(`ENVOIS PROGRAMMÉS AUJOURD'HUI (${d.envoisDuJour.length})\n${d.envoisDuJour.map((e) => `- ${e.heure} : ${e.entreprise}`).join("\n")}`);
   }
 
   if (d.actionsDuJour.length > 0) {

@@ -1,0 +1,37 @@
+name: Envois programmés
+
+on:
+  schedule:
+    # Toutes les 5 minutes (le minimum de GitHub). GitHub peut retarder l'exécution
+    # de quelques minutes aux heures chargées : un envoi part donc au premier passage
+    # qui suit l'heure choisie, parfois avec un léger retard.
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+# Un seul passage à la fois : si un passage est encore en cours, le suivant attend
+# plutôt que de lancer deux envois en parallèle.
+concurrency:
+  group: envois-programmes
+  cancel-in-progress: false
+
+jobs:
+  envois:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Déclencher /api/cron/envois
+        env:
+          SYNC_URL: ${{ secrets.SYNC_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          # Même adresse de base et même secret que la synchronisation des offres :
+          # aucune nouvelle variable à créer.
+          case "$SYNC_URL" in
+            */api/offres/sync) ;;
+            *) echo "SYNC_URL doit se terminer par /api/offres/sync" >&2; exit 1 ;;
+          esac
+          curl -sS -X POST "${SYNC_URL%/api/offres/sync}/api/cron/envois" \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            -H "Content-Type: application/json" \
+            -d '{}' \
+            --fail-with-body \
+            --max-time 70

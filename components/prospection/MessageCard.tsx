@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import { libelleLangue } from "@/lib/prospection/langue";
+import { formaterProgrammation, localVersInstant, validerProgrammation } from "@/lib/prospection/planification";
 import { estEnvoye, peutSupprimerMessage, texteSuppressionMessage } from "@/lib/prospection/suppression";
 import Confirmation from "./Confirmation";
 import type { Langue, ProspectionStatut } from "@/types/database.types";
-import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
+import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
 
 export interface CvInfo {
   nomFichier: string;
@@ -26,6 +27,9 @@ interface Props {
   // Nombre de relances rattachées à ce message (supprimées avec lui).
   nbRelances: number;
   onSupprime: (ids: string[]) => void;
+  // Envoi programmé actif de ce message, s'il y en a un.
+  programmation?: EnvoiProgramme;
+  onVoirProgrammes?: () => void;
 }
 
 export const LIBELLES_STATUT_MESSAGE: Record<ProspectionStatut, string> = {
@@ -54,6 +58,8 @@ export default function MessageCard({
   onFilModifie,
   nbRelances,
   onSupprime,
+  programmation,
+  onVoirProgrammes,
 }: Props) {
   const [ouvert, setOuvert] = useState(prospection.statut === "a_valider");
   const [objet, setObjet] = useState(prospection.objet);
@@ -68,6 +74,8 @@ export default function MessageCard({
   const [action, setAction] = useState<string | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [programmerOuvert, setProgrammerOuvert] = useState(false);
+  const [quand, setQuand] = useState("");
 
   // Le CV joint suit la langue du message.
   const cv = cvs[prospection.langue];
@@ -123,6 +131,23 @@ export default function MessageCard({
         : "Brouillon créé dans Gmail — relis-le et envoie-le depuis Gmail.",
     );
     if (typeof data.lien_brouillon === "string") window.open(data.lien_brouillon, "_blank", "noopener");
+  }
+
+  // Date saisie (heure de Paris) → instant, avec les avertissements éventuels.
+  const instantProgramme = localVersInstant(quand);
+  const validationProgramme = instantProgramme ? validerProgrammation(instantProgramme, new Date()) : null;
+
+  async function programmer() {
+    if (!instantProgramme) return;
+    const data = await appeler("programmation", `/api/prospection/${prospection.id}/programmer`, {
+      method: "POST",
+      body: JSON.stringify({ prevu_at: instantProgramme.toISOString(), confirme: true }),
+    });
+    if (!data) return;
+    onFilModifie();
+    setConfirme(false);
+    setProgrammerOuvert(false);
+    setInfo(`Envoi programmé : ${data.quand as string}. Tu peux le modifier ou l'annuler dans l'onglet « Programmés ».`);
   }
 
   async function envoyer() {
@@ -293,13 +318,62 @@ export default function MessageCard({
                 <input type="checkbox" checked={confirme} onChange={(e) => setConfirme(e.target.checked)} />
                 J&apos;ai vérifié le destinataire, le texte et la pièce jointe
               </label>
-              <button
-                className="action-btn primary"
-                onClick={envoyer}
-                disabled={action !== null || !confirme || !contact?.email || (joindreCv && !cv)}
-              >
-                {action === "envoi" ? "Envoi en cours..." : "Envoyer maintenant"}
-              </button>
+              {programmation && (
+                <p className="prospection-info" style={{ marginBottom: 10 }}>
+                  Envoi programmé : <b>{formaterProgrammation(new Date(programmation.prevu_at))}</b>.{" "}
+                  {onVoirProgrammes && (
+                    <button className="prospection-link-btn" onClick={onVoirProgrammes}>
+                      Gérer dans « Programmés »
+                    </button>
+                  )}
+                </p>
+              )}
+              <div className="prospection-actions">
+                <button
+                  className="action-btn primary"
+                  onClick={envoyer}
+                  disabled={action !== null || !confirme || !contact?.email || (joindreCv && !cv)}
+                >
+                  {action === "envoi" ? "Envoi en cours..." : "Envoyer maintenant"}
+                </button>
+                {prospection.statut === "valide" && !programmation && (
+                  <button
+                    className="action-btn"
+                    onClick={() => setProgrammerOuvert((v) => !v)}
+                    disabled={action !== null || !confirme || !contact?.email || !joindreCv || !cv}
+                    title={!joindreCv ? "Un envoi programmé joint toujours ton CV" : undefined}
+                  >
+                    Programmer l&apos;envoi
+                  </button>
+                )}
+              </div>
+              {programmerOuvert && (
+                <div style={{ marginTop: 12 }}>
+                  <label>
+                    Date et heure d&apos;envoi (heure de Paris)
+                    <input type="datetime-local" value={quand} onChange={(e) => setQuand(e.target.value)} />
+                  </label>
+                  {instantProgramme && !validationProgramme?.erreur && (
+                    <p className="prospection-info" style={{ marginTop: 8 }}>
+                      Envoi prévu le <b>{formaterProgrammation(instantProgramme)}</b>, à {contact?.email}, avec {cv?.nomFichier ?? "ton CV"}.
+                    </p>
+                  )}
+                  {validationProgramme?.erreur && <p className="prospection-erreur" style={{ marginTop: 8 }}>{validationProgramme.erreur}</p>}
+                  {validationProgramme?.avertissements.map((a) => (
+                    <p key={a} className="prospection-meta" style={{ marginTop: 4 }}>
+                      {a}
+                    </p>
+                  ))}
+                  <button
+                    className="action-btn primary"
+                    style={{ marginTop: 10 }}
+                    onClick={programmer}
+                    disabled={action !== null || !instantProgramme || Boolean(validationProgramme?.erreur)}
+                  >
+                    {action === "programmation" ? "Programmation..." : "Confirmer la programmation"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

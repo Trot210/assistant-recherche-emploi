@@ -30,6 +30,8 @@ export type EmailVerification = "valide" | "accept_all" | "inconnu" | "invalide"
 
 export type Langue = "fr" | "en";
 
+export type EnvoiProgrammeStatut = "programme" | "en_cours" | "envoye" | "annule" | "echec";
+
 export type ReponseType =
   | "entretien"
   | "offre"
@@ -457,6 +459,44 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["usage_ia"]["Insert"]>;
         Relationships: [];
       };
+      envois_programmes: {
+        Row: {
+          id: string;
+          user_id: string;
+          prospection_id: string;
+          prevu_at: string;
+          statut: EnvoiProgrammeStatut;
+          tentatives: number;
+          erreur: string | null;
+          origine: "manuel" | "etalement";
+          created_at: string;
+          debut_at: string | null;
+          termine_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          prospection_id: string;
+          prevu_at: string;
+          statut?: EnvoiProgrammeStatut;
+          tentatives?: number;
+          erreur?: string | null;
+          origine?: "manuel" | "etalement";
+          created_at?: string;
+          debut_at?: string | null;
+          termine_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["envois_programmes"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "envois_programmes_prospection_id_fkey";
+            columns: ["prospection_id"];
+            isOneToOne: false;
+            referencedRelation: "prospections";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       reglages: {
         Row: {
           user_id: string;
@@ -464,6 +504,8 @@ export interface Database {
           relances_auto: boolean;
           recap_actif: boolean;
           dernier_traitement: string | null;
+          envois_max_par_jour: number;
+          envois_ecart_minutes: number;
           updated_at: string;
         };
         Insert: {
@@ -472,6 +514,8 @@ export interface Database {
           relances_auto?: boolean;
           recap_actif?: boolean;
           dernier_traitement?: string | null;
+          envois_max_par_jour?: number;
+          envois_ecart_minutes?: number;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["reglages"]["Insert"]>;

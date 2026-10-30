@@ -7,3 +7,4 @@ export type ContactEntreprise = Database["public"]["Tables"]["contacts"]["Row"];
 export type ContactEntrepriseInsert = Database["public"]["Tables"]["contacts"]["Insert"];
 export type Prospection = Database["public"]["Tables"]["prospections"]["Row"];
 export type ProspectionInsert = Database["public"]["Tables"]["prospections"]["Insert"];
+export type EnvoiProgramme = Database["public"]["Tables"]["envois_programmes"]["Row"];
