@@ -19,18 +19,28 @@ const TEXTES: Record<Langue, { cordialement: string; desinscription: string }> =
   },
 };
 
-// D'où vient l'adresse du destinataire, dite en une expression qui suit « provient de » :
-// la personne a le droit de le savoir (RGPD), et ça explique pourquoi on lui écrit.
+// D'où vient l'adresse du destinataire, dite en une phrase complète : la personne
+// a le droit de le savoir (RGPD), et ça explique pourquoi on lui écrit.
 export function sourceAdresse(
   contact: Pick<ContactEntreprise, "origine" | "source_email"> | null | undefined,
   langue: Langue,
 ): string | null {
   if (!contact) return null;
   const en = langue === "en";
-  if (contact.origine === "hunter") return en ? "the Hunter.io professional directory" : "l'annuaire professionnel Hunter.io";
-  if (contact.origine === "page_publique") return en ? "your company's website" : "le site de votre entreprise";
+  if (contact.origine === "hunter") {
+    return en ? "Your address is listed in the Hunter.io professional directory." : "Votre adresse figure dans l'annuaire professionnel Hunter.io.";
+  }
+  if (contact.origine === "page_publique") {
+    return en ? "Your address is published on your company's website." : "Votre adresse est publiée sur le site de votre entreprise.";
+  }
+  if (contact.origine === "devine") {
+    return en
+      ? "Your address was inferred from your company's email address format."
+      : "Votre adresse a été déduite du format des adresses de votre entreprise.";
+  }
   const saisie = contact.source_email?.trim();
-  return saisie && saisie.length <= 80 ? saisie : null;
+  if (!saisie || saisie.length > 80) return null;
+  return en ? `Your address comes from: ${saisie}.` : `Votre adresse provient de : ${saisie}.`;
 }
 
 function formuleAppel(contactNom: string | null | undefined, langue: Langue): string {
@@ -47,7 +57,7 @@ export function assemblerMessage(params: {
   contactNom?: string | null;
   candidat: ContactCandidat;
   langue?: Langue;
-  // Provenance de l'adresse (voir sourceAdresse), ajoutée à la mention de désinscription.
+  // Phrase sur la provenance de l'adresse (voir sourceAdresse), placée avant la mention de désinscription.
   source?: string | null;
 }): string {
   const langue = params.langue ?? "fr";
@@ -60,9 +70,7 @@ export function assemblerMessage(params: {
     params.corps.trim(),
     TEXTES[langue].cordialement,
     signature,
-    params.source
-      ? `${langue === "en" ? `Your address comes from ${params.source}.` : `Votre adresse provient de ${params.source}.`} ${TEXTES[langue].desinscription}`
-      : TEXTES[langue].desinscription,
+    params.source ? `${params.source} ${TEXTES[langue].desinscription}` : TEXTES[langue].desinscription,
   ]
     .filter(Boolean)
     .join("\n\n");

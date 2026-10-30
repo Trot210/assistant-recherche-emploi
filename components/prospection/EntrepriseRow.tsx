@@ -11,6 +11,8 @@ import type { VerificationOffres } from "@/types/offres-entreprise";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import FicheEntreprise from "./FicheEntreprise";
 import OffresEntreprise from "./OffresEntreprise";
+import TrouverAdresse from "./TrouverAdresse";
+import { libelleVerification } from "@/lib/hunter/verification";
 import Confirmation from "./Confirmation";
 import {
   bilanEntreprise,
@@ -50,6 +52,8 @@ const AUTRE = "__autre__";
 interface OptionsRedaction {
   sansVerification?: boolean;
   forcer?: boolean;
+  // Écrire malgré un contact interne qui pourrait coopter.
+  ignorerContactInterne?: boolean;
 }
 
 // Le serveur demande une confirmation avant d'écrire (politique de l'entreprise).
@@ -73,6 +77,8 @@ export default function EntrepriseRow({
   const supabase = useMemo(() => createClient(), []);
   const [ouvert, setOuvert] = useState(false);
   const [notes, setNotes] = useState(entreprise.notes ?? "");
+  const [contactInterne, setContactInterne] = useState(entreprise.contact_interne ?? "");
+  const [verifContact, setVerifContact] = useState<string | null>(null);
   const [site, setSite] = useState(entreprise.site_web ?? "");
   const [erreur, setErreur] = useState<string | null>(null);
 
@@ -102,7 +108,14 @@ export default function EntrepriseRow({
     champs: Partial<
       Pick<
         Entreprise,
-        "statut" | "notes" | "site_web" | "politique_candidature" | "politique_note" | "offre_reperee_titre" | "offre_reperee_url"
+        | "statut"
+        | "notes"
+        | "site_web"
+        | "politique_candidature"
+        | "politique_note"
+        | "offre_reperee_titre"
+        | "offre_reperee_url"
+        | "contact_interne"
       >
     >,
   ) {
@@ -308,6 +321,32 @@ export default function EntrepriseRow({
     await mettreAJour({ offre_reperee_titre: titre || null, offre_reperee_url: url || null });
   }
 
+  async function verifierContact(contact: ContactEntreprise) {
+    setVerifContact(contact.id);
+    setErreur(null);
+    try {
+      const res = await fetch(`/api/prospection/contacts/${contact.id}/verifier`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la vérification");
+      onContactMaj(data.contact as ContactEntreprise);
+      if ((data.contact as ContactEntreprise).email_verification === "invalide" && contactId === contact.id) setContactId("");
+    } catch (e) {
+      setErreur(e instanceof Error ? e.message : "Erreur lors de la vérification");
+    } finally {
+      setVerifContact(null);
+    }
+  }
+
+  // Un contact interne peut coopter la candidature : on le rappelle avant d'écrire à froid.
+  function rappelContactInterne(options: OptionsRedaction, reprise: () => void): boolean {
+    if (!entreprise.contact_interne || options.ignorerContactInterne) return false;
+    setConfirmation({
+      raison: `Tu connais quelqu'un chez ${entreprise.nom} (${entreprise.contact_interne}). Une cooptation passe avant un message à froid : tu peux lui demander de transmettre ton CV.`,
+      relancer: reprise,
+    });
+    return true;
+  }
+
   async function basculerContact(contact: ContactEntreprise) {
     const statut = contact.email_statut === "ok" ? "ne_plus_contacter" : "ok";
     const { data, error } = await supabase.from("contacts").update({ email_statut: statut }).eq("id", contact.id).select().single();
@@ -319,6 +358,7 @@ export default function EntrepriseRow({
   async function rediger(options: OptionsRedaction = {}) {
     const posteVise = poste === AUTRE ? posteLibre.trim() : poste;
     if (!posteVise) return setErreur("Précise le poste visé");
+    if (rappelContactInterne(options, () => rediger({ ...options, ignorerContactInterne: true }))) return;
 
     setRedaction(true);
     setErreur(null);
@@ -349,6 +389,7 @@ export default function EntrepriseRow({
     setErreur(null);
     setInfo(null);
     setConfirmation(null);
+    if (rappelContactInterne(options, () => toutPreparer({ ...options, ignorerContactInterne: true }))) return;
     try {
       let courante = entreprise;
       const tous = [...contacts];
@@ -562,6 +603,17 @@ export default function EntrepriseRow({
           />
 
           <label>
+            Contact interne (quelqu&apos;un que tu connais dans l&apos;entreprise : nom et façon de le joindre)
+            <input
+              type="text"
+              value={contactInterne}
+              onChange={(e) => setContactInterne(e.target.value)}
+              onBlur={() => contactInterne.trim() !== (entreprise.contact_interne ?? "") && mettreAJour({ contact_interne: contactInterne.trim() || null })}
+              placeholder="ex : Julie Martin, ancienne collègue, joignable sur LinkedIn"
+            />
+          </label>
+
+          <label>
             Accroche personnelle (un fait réel sur l&apos;entreprise que tu veux mentionner — sinon le message restera
             sobre)
             <textarea
@@ -585,6 +637,12 @@ export default function EntrepriseRow({
                   {c.email_statut === "ne_plus_contacter" && <span className="prospection-erreur"> [ne plus contacter]</span>}
                   {c.poste && ` — ${c.poste}`}
                   {c.email ? ` — ${c.email}` : " — pas d'e-mail"}
+                  {c.email && (
+                    <span className={c.email_verification === "invalide" ? "prospection-erreur" : "prospection-meta"}>
+                      {" "}
+                      ({libelleVerification(c.email_verification)})
+                    </span>
+                  )}
                   {c.source_url ? (
                     <span className="prospection-meta">
                       {" "}
@@ -599,6 +657,13 @@ export default function EntrepriseRow({
                   )}
                 </span>
                 <span>
+                  {hunterActif && c.email && (
+                    <>
+                      <button className="prospection-link-btn" onClick={() => verifierContact(c)} disabled={verifContact !== null}>
+                        {verifContact === c.id ? "Vérification..." : "Vérifier"}
+                      </button>{" "}
+                    </>
+                  )}
                   <button className="prospection-link-btn" onClick={() => basculerContact(c)}>
                     {c.email_statut === "ok" ? "Ne plus contacter" : "Rétablir"}
                   </button>{" "}
@@ -638,6 +703,8 @@ export default function EntrepriseRow({
               + Ajouter le contact
             </button>
           </div>
+
+          <TrouverAdresse userId={userId} entreprise={entreprise} onContactAjoute={onContactAjoute} />
 
           <div>
             <div className="filter-group-label" style={{ marginBottom: 6 }}>

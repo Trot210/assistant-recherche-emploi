@@ -1,3 +1,6 @@
+import type { EmailVerification } from "@/types/database.types";
+import { verificationDepuisHunter } from "@/lib/hunter/verification";
+
 export interface EmailHunter {
   value: string;
   type: "personal" | "generic";
@@ -14,6 +17,8 @@ export interface ContactHunter {
   poste: string | null;
   email: string;
   source_url: string | null;
+  // Verdict de Hunter déjà fourni avec l'adresse (sans coût), s'il y en a un.
+  verification: EmailVerification | null;
 }
 
 const MAX_CONTACTS = 5;
@@ -46,5 +51,6 @@ export function choisirContactsHunter(emails: EmailHunter[], dejaConnus: string[
       poste: e.position,
       email: e.value,
       source_url: e.sources?.[0]?.uri ?? null,
+      verification: e.verification?.status ? verificationDepuisHunter({ status: e.verification.status }) : null,
     }));
 }

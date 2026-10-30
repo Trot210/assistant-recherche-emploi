@@ -12,6 +12,7 @@ import RechercheEntreprises from "./RechercheEntreprises";
 import EntrepriseRow from "./EntrepriseRow";
 import MessageCard, { type CvInfo } from "./MessageCard";
 import CvReference from "./CvReference";
+import EmployeursQuiRecrutent from "./EmployeursQuiRecrutent";
 import MessageEnvoye from "./MessageEnvoye";
 import ReponsesPanel from "./ReponsesPanel";
 import CoutClaude from "@/components/CoutClaude";
@@ -233,6 +234,12 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
           <RechercheEntreprises
             userId={userId}
             onImportees={(nouvelles) => setEntreprises((liste) => [...nouvelles, ...liste])}
+          />
+          <EmployeursQuiRecrutent
+            entreprises={entreprises}
+            onCiblee={(e) =>
+              setEntreprises((liste) => (liste.some((x) => x.id === e.id) ? liste.map((x) => (x.id === e.id ? e : x)) : [e, ...liste]))
+            }
           />
           <div className="prospection-liste">
             {entreprisesEcartees.length > 0 && (

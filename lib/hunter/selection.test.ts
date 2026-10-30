@@ -23,8 +23,16 @@ describe("choisirContactsHunter", () => {
         poste: "Responsable Trade Marketing",
         email: "marie.dupont@bel-group.com",
         source_url: "https://exemple.fr/equipe",
+        verification: "valide",
       },
     ]);
+  });
+
+  it("reprend le verdict de Hunter quand il existe, et le laisse vide sinon", () => {
+    const [avec] = choisirContactsHunter([email({ verification: { status: "accept_all" } })], []);
+    expect(avec.verification).toBe("accept_all");
+    const [sans] = choisirContactsHunter([email({ verification: null })], []);
+    expect(sans.verification).toBeNull();
   });
 
   it("écarte adresses génériques, peu fiables, invalides et postes hors sujet", () => {

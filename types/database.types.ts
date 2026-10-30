@@ -23,7 +23,10 @@ export type ProspectionStatut =
 
 export type ProspectionType = "initial" | "relance";
 
-export type ContactOrigine = "manuel" | "page_publique" | "hunter";
+export type ContactOrigine = "manuel" | "page_publique" | "hunter" | "devine";
+
+// Résultat de la vérification d'une adresse par Hunter.
+export type EmailVerification = "valide" | "accept_all" | "inconnu" | "invalide";
 
 export type Langue = "fr" | "en";
 
@@ -244,6 +247,7 @@ export interface Database {
           offre_reperee_titre: string | null;
           offre_reperee_url: string | null;
           offres_verifiees_at: string | null;
+          contact_interne: string | null;
           created_at: string;
         };
         Insert: {
@@ -268,6 +272,7 @@ export interface Database {
           offre_reperee_titre?: string | null;
           offre_reperee_url?: string | null;
           offres_verifiees_at?: string | null;
+          contact_interne?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["entreprises"]["Insert"]>;
@@ -288,6 +293,8 @@ export interface Database {
           pays: string | null;
           langue: Langue | null;
           email_statut: EmailStatut;
+          email_verification: EmailVerification | null;
+          email_verifie_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -304,6 +311,8 @@ export interface Database {
           pays?: string | null;
           langue?: Langue | null;
           email_statut?: EmailStatut;
+          email_verification?: EmailVerification | null;
+          email_verifie_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;

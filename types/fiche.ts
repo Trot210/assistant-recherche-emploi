@@ -36,4 +36,6 @@ export interface Fiche {
   // Date de la dernière recherche Hunter pour cette entreprise : évite de
   // relancer (et de consommer le quota) quand elle n'avait rien donné.
   hunter_recherche_at?: string | null;
+  // Format des adresses de l'entreprise renvoyé par Hunter (ex : "{first}.{last}").
+  hunter_pattern?: string | null;
 }

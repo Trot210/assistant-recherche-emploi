@@ -34,17 +34,19 @@ describe("assemblerMessage en anglais", () => {
 });
 
 describe("provenance de l'adresse", () => {
-  it("nomme la source dans la mention de désinscription, en français et en anglais", () => {
-    const fr = assemblerMessage({ corps: "Corps", candidat, source: "l'annuaire professionnel Hunter.io" });
-    expect(fr).toMatch(/Votre adresse provient de l'annuaire professionnel Hunter\.io\. Si vous préférez/);
-    const en = assemblerMessage({ corps: "Body", candidat, langue: "en", source: "your company's website" });
-    expect(en).toMatch(/Your address comes from your company's website\. If you'd rather/);
+  it("place la phrase de provenance avant la mention de désinscription, en français et en anglais", () => {
+    const fr = assemblerMessage({ corps: "Corps", candidat, source: "Votre adresse figure dans l'annuaire professionnel Hunter.io." });
+    expect(fr).toMatch(/Hunter\.io\. Si vous préférez/);
+    const en = assemblerMessage({ corps: "Body", candidat, langue: "en", source: "Your address is published on your company's website." });
+    expect(en).toMatch(/website\. If you'd rather/);
   });
 
-  it("choisit la formulation selon l'origine du contact", () => {
-    expect(sourceAdresse({ origine: "hunter", source_email: null }, "fr")).toBe("l'annuaire professionnel Hunter.io");
-    expect(sourceAdresse({ origine: "page_publique", source_email: null }, "en")).toBe("your company's website");
-    expect(sourceAdresse({ origine: "manuel", source_email: " site de l'entreprise " }, "fr")).toBe("site de l'entreprise");
+  it("choisit la phrase selon l'origine du contact, avec des phrases correctes en français", () => {
+    expect(sourceAdresse({ origine: "hunter", source_email: null }, "fr")).toBe("Votre adresse figure dans l'annuaire professionnel Hunter.io.");
+    expect(sourceAdresse({ origine: "page_publique", source_email: null }, "fr")).toBe("Votre adresse est publiée sur le site de votre entreprise.");
+    expect(sourceAdresse({ origine: "page_publique", source_email: null }, "en")).toBe("Your address is published on your company's website.");
+    expect(sourceAdresse({ origine: "devine", source_email: null }, "fr")).toBe("Votre adresse a été déduite du format des adresses de votre entreprise.");
+    expect(sourceAdresse({ origine: "manuel", source_email: " site de l'entreprise " }, "fr")).toBe("Votre adresse provient de : site de l'entreprise.");
     expect(sourceAdresse({ origine: "manuel", source_email: "x".repeat(81) }, "fr")).toBeNull();
     expect(sourceAdresse(null, "fr")).toBeNull();
   });

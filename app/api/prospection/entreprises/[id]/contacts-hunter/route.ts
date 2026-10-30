@@ -46,7 +46,7 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .eq("entreprise_id", entreprise.id)
       .eq("user_id", user.id);
 
-    const { emails, pays } = await rechercherEmailsDomaine(domaine, entreprise.nom);
+    const { emails, pays, pattern } = await rechercherEmailsDomaine(domaine, entreprise.nom);
     const choisis = choisirContactsHunter(
       emails,
       (existants ?? []).map((c) => c.email).filter((e): e is string => Boolean(e)),
@@ -67,6 +67,8 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
                 pays,
                 source_url: c.source_url,
                 source_email: `Hunter.io${c.source_url ? ` — page source : ${c.source_url}` : ""}`,
+                email_verification: c.verification,
+                email_verifie_at: c.verification ? new Date().toISOString() : null,
               })),
             )
             .select()
@@ -79,7 +81,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
     if (entreprise.fiche) {
       const { data } = await supabase
         .from("entreprises")
-        .update({ fiche: { ...entreprise.fiche, hunter_recherche_at: new Date().toISOString() } })
+        .update({
+          fiche: { ...entreprise.fiche, hunter_recherche_at: new Date().toISOString(), hunter_pattern: pattern ?? null },
+        })
         .eq("id", entreprise.id)
         .eq("user_id", user.id)
         .select()

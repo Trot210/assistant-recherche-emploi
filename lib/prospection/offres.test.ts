@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   dedoublonnerOffres,
   lienOffreFranceTravail,
+  liensPersonnes,
   liensRecherche,
   marqueEntreprise,
   memeEntreprise,
@@ -84,5 +85,13 @@ describe("liens", () => {
 
   it("construit le lien public d'une offre France Travail", () => {
     expect(lienOffreFranceTravail("123ABC")).toBe("https://candidat.francetravail.fr/offres/recherche/detail/123ABC");
+  });
+});
+
+describe("liensPersonnes", () => {
+  it("prépare des recherches de personnes avec la marque", () => {
+    const liens = liensPersonnes("OPELLA HEALTHCARE FRANCE SAS");
+    expect(liens).toHaveLength(3);
+    expect(liens[0].url).toBe("https://www.linkedin.com/search/results/people/?keywords=opella%20category%20manager");
   });
 });

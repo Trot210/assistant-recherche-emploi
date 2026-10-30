@@ -110,3 +110,18 @@ export function liensRecherche(nomEntreprise: string, posteVise: string, siteWeb
   }
   return liens;
 }
+
+// Recherches de personnes préparées pour trouver le nom d'un responsable (même
+// principe que pour les offres : un clic, ta session, rien n'est parcouru à ta place).
+export function liensPersonnes(nomEntreprise: string): LienRecherche[] {
+  const marque = marqueEntreprise(nomEntreprise) ?? nomEntreprise;
+  const lien = (libelle: string, mots: string): LienRecherche => ({
+    libelle,
+    url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(`${marque} ${mots}`)}`,
+  });
+  return [
+    lien("Category / achats", "category manager"),
+    lien("Trade marketing", "trade marketing"),
+    lien("Direction commerciale", "directeur commercial"),
+  ];
+}

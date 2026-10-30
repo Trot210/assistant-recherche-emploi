@@ -26,6 +26,8 @@ function score(contact: ContactEntreprise, posteVise: string): number {
   if (RECRUTEUR.test(poste)) total += 2;
   if (COMMERCIAL.test(poste)) total += 1;
   if (!contact.generique) total += 0.5;
+  // Une adresse confirmée par Hunter passe devant une adresse non vérifiée, à poste égal.
+  if (contact.email_verification === "valide") total += 0.3;
   if (SENIOR.test(poste)) total += 1.5;
   if (JUNIOR.test(poste)) total -= 2;
   return total;

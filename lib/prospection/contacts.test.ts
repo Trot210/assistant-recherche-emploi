@@ -17,6 +17,8 @@ function contact(surcharge: Partial<ContactEntreprise>): ContactEntreprise {
     pays: null,
     langue: null,
     email_statut: "ok",
+    email_verification: null,
+    email_verifie_at: null,
     created_at: "2026-10-29T00:00:00Z",
     ...surcharge,
   };
@@ -58,5 +60,11 @@ describe("choisirMeilleurContact", () => {
     const bon = contact({ id: "c", poste: "Assistant" });
     expect(choisirMeilleurContact([rebond, refus, bon], "Trade Marketing")?.id).toBe("c");
     expect(choisirMeilleurContact([rebond, refus], "Trade Marketing")).toBeNull();
+  });
+
+  it("à poste égal, préfère l'adresse vérifiée", () => {
+    const verifiee = contact({ id: "v", poste: "Head of Trade Marketing", email_verification: "valide" });
+    const autre = contact({ id: "a", poste: "Head of Trade Marketing" });
+    expect(choisirMeilleurContact([autre, verifiee], "Trade Marketing")?.id).toBe("v");
   });
 });
