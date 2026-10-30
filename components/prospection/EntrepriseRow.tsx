@@ -1,12 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { choisirMeilleurContact } from "@/lib/prospection/contacts";
 import { libelleLangue, suggererLangueContact } from "@/lib/prospection/langue";
 import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
 import { libellePolitique, POLITIQUES, estPolitique } from "@/lib/prospection/politique";
 import type { EntrepriseStatut, Langue } from "@/types/database.types";
+import { formaterDateFr } from "@/lib/prospection/dates";
+import type { OffreTrouvee } from "@/lib/prospection/offres";
 import type { VerificationOffres } from "@/types/offres-entreprise";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import FicheEntreprise from "./FicheEntreprise";
@@ -108,7 +110,14 @@ export default function EntrepriseRow({
   const [offreBloquante, setOffreBloquante] = useState(false);
   // Ce qu'il faut relancer si tu choisis d'écrire malgré l'offre publiée.
   const [repriseApresOffre, setRepriseApresOffre] = useState<(() => void) | null>(null);
-  const [confirmation, setConfirmation] = useState<{ raison: string; relancer: () => void } | null>(null);
+  const [confirmation, setConfirmation] = useState<{ raison: string; relancer: () => void; offres?: OffreTrouvee[] } | null>(null);
+  const confirmationRef = useRef<HTMLDivElement>(null);
+
+  // Quand le site s'arrête pour te demander ton avis (offre déjà publiée, politique de
+  // l'entreprise...), le message doit être visible : on amène le bloc à l'écran.
+  useEffect(() => {
+    if (confirmation) confirmationRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }, [confirmation]);
 
   async function mettreAJour(
     champs: Partial<
@@ -301,9 +310,9 @@ export default function EntrepriseRow({
     return data.prospection;
   }
 
-  // Cherche les offres déjà publiées (gratuit). Renvoie vrai si une offre
+  // Cherche les offres déjà publiées (gratuit). `trouvee` est vrai si une offre
   // correspondante existe, ou si tu en as repéré une toi-même.
-  async function verifierOffres(posteVise: string): Promise<boolean> {
+  async function verifierOffres(posteVise: string): Promise<{ trouvee: boolean; resultat: VerificationOffres }> {
     setVerifEnCours(true);
     try {
       const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/offres`, {
@@ -317,10 +326,22 @@ export default function EntrepriseRow({
       setVerification(resultat);
       const trouvee = resultat.offres.length > 0 || Boolean(entreprise.offre_reperee_url || entreprise.offre_reperee_titre);
       setOffreBloquante(trouvee);
-      return trouvee;
+      return { trouvee, resultat };
     } finally {
       setVerifEnCours(false);
     }
+  }
+
+  // La rédaction s'arrête parce qu'une offre existe déjà : on le dit à côté du bouton,
+  // avec les offres trouvées, et on propose d'écrire quand même.
+  function signalerOffre(resultat: VerificationOffres, reprise: () => void) {
+    const n = resultat.offres.length;
+    const raison =
+      n > 0
+        ? `${entreprise.nom} a déjà publié ${n > 1 ? `${n} offres qui correspondent` : "une offre qui correspond"} à ce poste : postuler directement est plus efficace qu'un message à froid. Rien n'a été rédigé.`
+        : `Tu as repéré une offre chez ${entreprise.nom}${entreprise.offre_reperee_titre ? ` (${entreprise.offre_reperee_titre})` : ""} : postuler directement est plus efficace qu'un message à froid. Rien n'a été rédigé.`;
+    setRepriseApresOffre(() => reprise);
+    setConfirmation({ raison, relancer: reprise, offres: resultat.offres.slice(0, 3) });
   }
 
   async function enregistrerOffreReperee(titre: string, url: string) {
@@ -366,16 +387,31 @@ export default function EntrepriseRow({
     if (!posteVise) return setErreur("Précise le poste visé");
     if (rappelContactInterne(options, () => rediger({ ...options, ignorerContactInterne: true }))) return;
 
+    // Sans destinataire choisi, le message n'aurait aucune adresse : on retient le meilleur
+    // contact joignable de l'entreprise, comme « Tout préparer ».
+    let destinataireId = contactId;
+    if (!destinataireId) {
+      const meilleur = choisirMeilleurContact(contacts, posteVise);
+      if (meilleur) {
+        destinataireId = meilleur.id;
+        setContactId(meilleur.id);
+        setInfo(`Destinataire choisi automatiquement : ${meilleur.nom}.`);
+      }
+    }
+
     setRedaction(true);
     setErreur(null);
     setConfirmation(null);
     try {
-      if (!options.sansVerification && (await verifierOffres(posteVise).catch(() => false))) {
-        setRepriseApresOffre(() => () => rediger({ ...options, sansVerification: true }));
-        return;
+      if (!options.sansVerification) {
+        const offres = await verifierOffres(posteVise).catch(() => null);
+        if (offres?.trouvee) {
+          signalerOffre(offres.resultat, () => rediger({ ...options, sansVerification: true }));
+          return;
+        }
       }
       onMessageCree(
-        await demanderMessage(posteVise, contactId, langueChoix === "auto" ? undefined : langueChoix, options.forcer),
+        await demanderMessage(posteVise, destinataireId, langueChoix === "auto" ? undefined : langueChoix, options.forcer),
       );
     } catch (e) {
       if (e instanceof ConfirmationPolitique) {
@@ -405,8 +441,9 @@ export default function EntrepriseRow({
       if (!options.sansVerification) {
         setPreparation("Recherche des offres déjà publiées...");
         const posteProbable = courante.fiche?.postes_suggeres[0]?.poste ?? (poste === AUTRE ? posteLibre.trim() : poste);
-        if (await verifierOffres(posteProbable).catch(() => false)) {
-          setRepriseApresOffre(() => () => toutPreparer({ ...options, sansVerification: true }));
+        const offres = await verifierOffres(posteProbable).catch(() => null);
+        if (offres?.trouvee) {
+          signalerOffre(offres.resultat, () => toutPreparer({ ...options, sansVerification: true }));
           setOuvert(true);
           return;
         }
@@ -594,6 +631,7 @@ export default function EntrepriseRow({
             )}
           </label>
 
+          <div id={`offres-${entreprise.id}`}>
           <OffresEntreprise
             entreprise={entreprise}
             verification={verification}
@@ -612,6 +650,7 @@ export default function EntrepriseRow({
             }}
             onEnregistrerOffreReperee={enregistrerOffreReperee}
           />
+          </div>
 
           <label>
             Contact interne (quelqu&apos;un que tu connais dans l&apos;entreprise : nom et façon de le joindre)
@@ -715,7 +754,15 @@ export default function EntrepriseRow({
             </button>
           </div>
 
-          <TrouverAdresse userId={userId} entreprise={entreprise} onContactAjoute={onContactAjoute} />
+          <TrouverAdresse
+            userId={userId}
+            entreprise={entreprise}
+            onContactAjoute={(c) => {
+              onContactAjoute(c);
+              // Le contact qu'on vient de trouver devient le destinataire du prochain message.
+              if (c.email) setContactId(c.id);
+            }}
+          />
 
           <div>
             <div className="filter-group-label" style={{ marginBottom: 6 }}>
@@ -770,12 +817,39 @@ export default function EntrepriseRow({
       )}
 
       {confirmation && (
-        <div className="prospection-bloc" style={{ marginTop: 10 }}>
+        <div className="prospection-bloc" style={{ marginTop: 10 }} ref={confirmationRef}>
           <p className="prospection-erreur">{confirmation.raison}</p>
+          {confirmation.offres && confirmation.offres.length > 0 && (
+            <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13.5, lineHeight: 1.7 }}>
+              {confirmation.offres.map((o) => (
+                <li key={`${o.source}-${o.lien ?? o.titre}-${o.lieu ?? ""}`}>
+                  {o.lien ? (
+                    <a href={o.lien} target="_blank" rel="noopener noreferrer">
+                      {o.titre}
+                    </a>
+                  ) : (
+                    o.titre
+                  )}
+                  <span className="prospection-meta">
+                    {" "}
+                    — {[o.employeur, o.lieu, o.date ? formaterDateFr(o.date) : null].filter(Boolean).join(" · ")}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="prospection-actions" style={{ marginTop: 8 }}>
             <button className="action-btn primary" onClick={confirmation.relancer}>
               Écrire quand même
             </button>
+            {confirmation.offres && (
+              <button
+                className="action-btn"
+                onClick={() => document.getElementById(`offres-${entreprise.id}`)?.scrollIntoView({ behavior: "smooth", block: "start" })}
+              >
+                Voir toutes les offres
+              </button>
+            )}
             <button className="action-btn" onClick={() => setConfirmation(null)}>
               Renoncer
             </button>
