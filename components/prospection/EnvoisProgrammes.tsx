@@ -150,8 +150,8 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
     <div>
       <p className="prospection-meta" style={{ marginBottom: 12 }}>
         Les messages ci-dessous partent tout seuls, à l&apos;heure choisie, même ordinateur éteint : le serveur les envoie depuis ta
-        boîte Gmail, avec le CV de la bonne langue. Au plus un envoi toutes les 10 minutes et 6 par jour ; un passage a lieu toutes les 5
-        minutes, un envoi peut donc partir avec quelques minutes de retard.
+        boîte Gmail, avec le CV de la bonne langue. Au plus un envoi toutes les 10 minutes et 6 par jour ; la planification vérifie chaque
+        minute, un envoi part donc dans la minute qui suit l&apos;heure choisie.
       </p>
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 10 }}>{erreur}</p>}

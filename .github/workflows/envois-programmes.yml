@@ -2,9 +2,10 @@ name: Envois programmés
 
 on:
   schedule:
-    # Toutes les 5 minutes (le minimum de GitHub). GitHub peut retarder l'exécution
-    # de quelques minutes aux heures chargées : un envoi part donc au premier passage
-    # qui suit l'heure choisie, parfois avec un léger retard.
+    # Tâche de SECOURS. La planification principale est faite chaque minute par la base de
+    # données (pg_cron, voir supabase/migrations/0021_planification_pg_cron.sql) : les
+    # tâches planifiées de GitHub sont irrégulières (parfois plusieurs heures d'écart).
+    # Les deux peuvent tourner sans risque : chaque envoi est réservé de façon atomique.
     - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
