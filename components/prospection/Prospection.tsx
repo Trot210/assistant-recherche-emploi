@@ -304,6 +304,13 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                 contacts={contacts.filter((c) => c.entreprise_id === entreprise.id)}
                 nbMessages={nbParEntreprise.get(entreprise.id) ?? 0}
                 messages={prospections.filter((p) => p.entreprise_id === entreprise.id)}
+                nbProgrammes={
+                  envois.filter(
+                    (x) =>
+                      (x.statut === "programme" || x.statut === "en_cours") &&
+                      prospections.some((p) => p.id === x.prospection_id && p.entreprise_id === entreprise.id),
+                  ).length
+                }
                 onRetiree={entrepriseRetiree}
                 onSupprimee={entrepriseSupprimee}
                 onEntrepriseChange={(maj) => setEntreprises((l) => l.map((e) => (e.id === maj.id ? maj : e)))}

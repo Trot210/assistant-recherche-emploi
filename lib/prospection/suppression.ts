@@ -18,14 +18,17 @@ export interface BilanEntreprise {
   contacts: number;
   brouillons: number;
   envoyes: number;
+  // Envois programmés encore en attente : ils disparaissent avec leurs messages.
+  programmes: number;
 }
 
 export function bilanEntreprise(
   messages: Pick<Prospection, "date_envoi">[],
   nbContacts: number,
+  nbProgrammes = 0,
 ): BilanEntreprise {
   const envoyes = messages.filter(estEnvoye).length;
-  return { contacts: nbContacts, brouillons: messages.length - envoyes, envoyes };
+  return { contacts: nbContacts, brouillons: messages.length - envoyes, envoyes, programmes: nbProgrammes };
 }
 
 export type ModeSuppressionEntreprise = "retirer" | "supprimer";
@@ -49,12 +52,17 @@ export function texteSuppressionEntreprise(nom: string, bilan: BilanEntreprise, 
       bilan.brouillons > 0
         ? `. ${pluriel(bilan.brouillons, "brouillon")} en attente ${bilan.brouillons > 1 ? "seront supprimés" : "sera supprimé"}`
         : "";
-    return `${nom} sera retirée de ta liste (onglet « Écartées »). ${conserves} et ses contacts sont conservés, avec les statistiques${brouillons}.`;
+    const programmes =
+      bilan.programmes > 0
+        ? ` ${bilan.programmes > 1 ? `Ses ${bilan.programmes} envois programmés seront annulés` : "Son envoi programmé sera annulé"} : ils ne partiront pas.`
+        : "";
+    return `${nom} sera retirée de ta liste (onglet « Écartées »). ${conserves} et ses contacts sont conservés, avec les statistiques${brouillons}.${programmes}`;
   }
   const effaces = [
     bilan.contacts > 0 ? pluriel(bilan.contacts, "contact") : null,
     bilan.brouillons > 0 ? pluriel(bilan.brouillons, "brouillon") : null,
     bilan.envoyes > 0 ? pluriel(bilan.envoyes, "message envoyé", "messages envoyés") : null,
+    bilan.programmes > 0 ? `${pluriel(bilan.programmes, "envoi programmé", "envois programmés")} (qui ne partiront pas)` : null,
   ].filter(Boolean);
   const suite =
     bilan.envoyes > 0
@@ -83,10 +91,13 @@ export function texteSuppressionMessage(params: {
   envoye: boolean;
   dateEnvoi: string | null;
   nbRelances: number;
+  // Date de l'envoi programmé encore en attente, déjà mise en forme, s'il y en a un.
+  programmeLe?: string | null;
 }): string {
-  const { nomEntreprise, envoye, dateEnvoi, nbRelances } = params;
+  const { nomEntreprise, envoye, dateEnvoi, nbRelances, programmeLe } = params;
   if (!envoye) {
-    return `Supprimer ce message à ${nomEntreprise} ? Il n'a pas été envoyé. L'entreprise et ses contacts ne sont pas touchés.`;
+    const programme = programmeLe ? ` Son envoi programmé (${programmeLe}) sera annulé : il ne partira pas.` : "";
+    return `Supprimer ce message à ${nomEntreprise} ? Il n'a pas été envoyé.${programme} L'entreprise et ses contacts ne sont pas touchés.`;
   }
   const relances = nbRelances > 0 ? `, avec ${nbRelances === 1 ? "sa relance" : `ses ${nbRelances} relances`}` : "";
   return `Ce message a été envoyé${dateEnvoi ? ` le ${dateEnvoi}` : ""}. Le supprimer l'efface de l'historique et des statistiques${relances}. L'e-mail déjà parti reste chez son destinataire. L'entreprise et ses contacts ne sont pas touchés.`;

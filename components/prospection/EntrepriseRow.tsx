@@ -31,6 +31,8 @@ interface Props {
   nbMessages: number;
   // Tous les messages de cette entreprise : ils déterminent ce que la suppression conserve.
   messages: Prospection[];
+  // Envois programmés encore en attente pour cette entreprise : ils ne partiraient plus.
+  nbProgrammes: number;
   onRetiree: (entreprise: Entreprise, idsSupprimes: string[]) => void;
   onSupprimee: (entrepriseId: string, idsSupprimes: string[]) => void;
   onEntrepriseChange: (entreprise: Entreprise) => void;
@@ -69,6 +71,7 @@ export default function EntrepriseRow({
   contacts,
   nbMessages,
   messages,
+  nbProgrammes,
   onRetiree,
   onSupprimee,
   onEntrepriseChange,
@@ -266,7 +269,7 @@ export default function EntrepriseRow({
     onContactAjoute(data);
   }
 
-  const bilan = bilanEntreprise(messages, contacts.length);
+  const bilan = bilanEntreprise(messages, contacts.length, nbProgrammes);
   const modes = modesProposes(bilan, entreprise.statut);
   const contactChoisi = contacts.find((c) => c.id === contactId);
   const suggestionLangue = contactChoisi

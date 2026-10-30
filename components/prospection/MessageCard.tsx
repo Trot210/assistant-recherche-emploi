@@ -234,6 +234,7 @@ export default function MessageCard({
             envoye: estEnvoye(prospection),
             dateEnvoi: prospection.date_envoi ? formaterDate(prospection.date_envoi) : null,
             nbRelances,
+            programmeLe: programmation ? formaterProgrammation(new Date(programmation.prevu_at)) : null,
           })}
           actions={[{ libelle: "Supprimer définitivement", onClick: supprimer, danger: true }]}
           enCours={suppression.enCours}
@@ -268,6 +269,14 @@ export default function MessageCard({
               disabled={!modifiable}
             />
           </label>
+
+          {programmation && modifie && (
+            <p className="prospection-erreur">
+              Cet envoi est programmé ({formaterProgrammation(new Date(programmation.prevu_at))}). Enregistrer ces modifications
+              <b> l&apos;annulera</b> : le message devra être validé à nouveau, puis reprogrammé. Pour modifier le texte sans annuler la
+              programmation, utilise « Modifier » dans l&apos;onglet « Programmés ».
+            </p>
+          )}
 
           {modifiable && modifie && (
             <p className="prospection-meta">
@@ -391,7 +400,7 @@ export default function MessageCard({
           <div className="prospection-actions">
             {modifiable && modifie && (
               <button className="action-btn primary" onClick={enregistrer} disabled={action !== null}>
-                Enregistrer les modifications
+                {programmation ? "Enregistrer et annuler l'envoi programmé" : "Enregistrer les modifications"}
               </button>
             )}
 

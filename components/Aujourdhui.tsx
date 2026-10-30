@@ -7,6 +7,7 @@ import { formaterDateFr } from "@/lib/prospection/dates";
 import { offrePertinente } from "@/lib/prospection/offres";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import { calculerPriorite, resumerPriorite } from "@/lib/prospection/priorite";
+import { envoiASurveiller } from "@/lib/prospection/envois-alertes";
 import { formaterProgrammation } from "@/lib/prospection/planification";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
 import Automatisation from "@/components/Automatisation";
@@ -43,7 +44,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
       supabase.from("prospections").select().order("created_at", { ascending: false }),
       supabase.from("offres").select("titre").gte("created_at", depuis).limit(1000),
       supabase.from("contacts").select(),
-      supabase.from("envois_programmes").select().in("statut", ["programme", "en_cours", "echec"]).order("prevu_at"),
+      supabase.from("envois_programmes").select().in("statut", ["programme", "en_cours", "echec", "annule"]).order("prevu_at"),
     ]);
     const echec = e.error ?? p.error;
     if (echec) setErreur(echec.message);
@@ -88,7 +89,8 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
     .slice(0, 3);
 
   const envoisAVenir = envois.filter((x) => x.statut === "programme" || x.statut === "en_cours");
-  const envoisEchoues = envois.filter((x) => x.statut === "echec");
+  // Envois échoués, ou annulés par le site (message modifié, adresse invalide...), à reprogrammer.
+  const envoisEchoues = envois.filter((x) => envoiASurveiller(x, new Date()));
   const nomEnvoi = (x: EnvoiProgramme) => {
     const p = prospections.find((y) => y.id === x.prospection_id);
     return p ? `${nomEntreprise.get(p.entreprise_id) ?? "Entreprise"} — ${p.poste_vise}` : "Message";
@@ -169,12 +171,15 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
 
       {envoisEchoues.length > 0 && (
         <div className="prospection-bloc">
-          <h3>Envois programmés échoués ({envoisEchoues.length})</h3>
+          <h3>Envois programmés annulés ou échoués ({envoisEchoues.length})</h3>
           <div className="prospection-liste">
             {envoisEchoues.map((x) => (
               <div key={x.id} className="prospection-ligne due">
                 <div className="prospection-titre">{nomEnvoi(x)}</div>
-                <div className="prospection-erreur">{x.erreur ?? "Raison inconnue"}</div>
+                <div className="prospection-erreur">
+                  {x.statut === "annule" ? "Annulé : " : "Échoué : "}
+                  {x.erreur ?? "raison inconnue"}
+                </div>
               </div>
             ))}
           </div>
