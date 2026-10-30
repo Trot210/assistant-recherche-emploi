@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { genererFicheEntreprise } from "@/lib/anthropic/fiche-entreprise";
 import { ouvrirUsage } from "@/lib/anthropic/usage";
+import { contactsDepuisFiche } from "@/lib/prospection/contacts-fiche";
 
 // Lecture des pages du site + un appel de synthèse (et au plus une recherche
 // web pour trouver le site) : une vingtaine de secondes en général.
@@ -43,42 +44,12 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
       .select("nom, email")
       .eq("entreprise_id", entreprise.id)
       .eq("user_id", user.id);
-    const emailsConnus = new Set((existants ?? []).map((c) => c.email?.toLowerCase()).filter(Boolean));
-    const nomsConnus = new Set((existants ?? []).map((c) => c.nom.toLowerCase()));
-
-    const aCreer = [];
-
-    // L'adresse générique n'est ajoutée que si elle est confirmée par un
-    // extrait cité ; sinon elle reste affichée dans la fiche, à vérifier.
-    const adresse = fiche.adresse_candidature;
-    if (adresse?.confirmee && !emailsConnus.has(adresse.email.toLowerCase())) {
-      aCreer.push({
-        user_id: user.id,
-        entreprise_id: entreprise.id,
-        nom: "Recrutement",
-        poste: "Candidatures spontanées",
-        email: adresse.email,
-        generique: true,
-        origine: "page_publique" as const,
-        source_url: adresse.source_url,
-        source_email: `Page publique de l'entreprise : ${adresse.source_url}`,
-      });
-    }
-
-    for (const contact of fiche.contacts_publics) {
-      if (nomsConnus.has(contact.nom.toLowerCase())) continue;
-      if (contact.email && emailsConnus.has(contact.email.toLowerCase())) continue;
-      aCreer.push({
-        user_id: user.id,
-        entreprise_id: entreprise.id,
-        nom: contact.nom,
-        poste: contact.poste,
-        email: contact.email,
-        origine: "page_publique" as const,
-        source_url: contact.source_url,
-        source_email: contact.email ? `Page publique : ${contact.source_url}` : null,
-      });
-    }
+    const aCreer = contactsDepuisFiche({
+      userId: user.id,
+      entrepriseId: entreprise.id,
+      fiche,
+      dejaConnus: existants ?? [],
+    });
 
     const { data: contacts, error: contactsError } =
       aCreer.length > 0
