@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assemblerMessage, offrePourProspection } from "@/lib/prospection/message";
+import { assemblerMessage, offrePourProspection, sourceAdresse } from "@/lib/prospection/message";
 import type { Entreprise } from "@/types/prospection";
 
 const candidat = { nom: "Lucien Tamba", telephone: "06 00 00 00 00", email: "lucien@exemple.fr" };
@@ -30,6 +30,23 @@ describe("assemblerMessage en anglais", () => {
 
   it("reste neutre sans contact", () => {
     expect(assemblerMessage({ corps: "Body", contactNom: null, candidat, langue: "en" }).startsWith("Hello,\n\n")).toBe(true);
+  });
+});
+
+describe("provenance de l'adresse", () => {
+  it("nomme la source dans la mention de désinscription, en français et en anglais", () => {
+    const fr = assemblerMessage({ corps: "Corps", candidat, source: "l'annuaire professionnel Hunter.io" });
+    expect(fr).toMatch(/Votre adresse provient de l'annuaire professionnel Hunter\.io\. Si vous préférez/);
+    const en = assemblerMessage({ corps: "Body", candidat, langue: "en", source: "your company's website" });
+    expect(en).toMatch(/Your address comes from your company's website\. If you'd rather/);
+  });
+
+  it("choisit la formulation selon l'origine du contact", () => {
+    expect(sourceAdresse({ origine: "hunter", source_email: null }, "fr")).toBe("l'annuaire professionnel Hunter.io");
+    expect(sourceAdresse({ origine: "page_publique", source_email: null }, "en")).toBe("your company's website");
+    expect(sourceAdresse({ origine: "manuel", source_email: " site de l'entreprise " }, "fr")).toBe("site de l'entreprise");
+    expect(sourceAdresse({ origine: "manuel", source_email: "x".repeat(81) }, "fr")).toBeNull();
+    expect(sourceAdresse(null, "fr")).toBeNull();
   });
 });
 

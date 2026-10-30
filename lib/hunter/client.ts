@@ -85,3 +85,20 @@ export async function quotaHunter(): Promise<{ utilisees: number; disponibles: n
     return null;
   }
 }
+
+export interface QuotaHunter {
+  recherches: { utilisees: number; disponibles: number };
+  verifications: { utilisees: number; disponibles: number };
+}
+
+// Crédits restants du mois. L'appel au compte ne consomme aucun crédit.
+export async function lireQuotaHunter(): Promise<QuotaHunter> {
+  const data = await appeler<{
+    data?: { requests?: { searches?: { used?: number; available?: number }; verifications?: { used?: number; available?: number } } };
+  }>("/account", {});
+  const r = data.data?.requests;
+  return {
+    recherches: { utilisees: r?.searches?.used ?? 0, disponibles: r?.searches?.available ?? 0 },
+    verifications: { utilisees: r?.verifications?.used ?? 0, disponibles: r?.verifications?.available ?? 0 },
+  };
+}

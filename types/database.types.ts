@@ -27,7 +27,19 @@ export type ContactOrigine = "manuel" | "page_publique" | "hunter";
 
 export type Langue = "fr" | "en";
 
-export type ReponseType = "entretien" | "offre" | "refus" | "pas_de_poste" | "cv_non_conserve" | "autre";
+export type ReponseType =
+  | "entretien"
+  | "offre"
+  | "refus"
+  | "pas_de_poste"
+  | "cv_non_conserve"
+  | "autre"
+  | "non_distribue";
+
+// Ce que l'entreprise accepte (ou non) en matière de candidatures spontanées.
+export type PolitiqueCandidature = "acceptees" | "non_conservees" | "portail_uniquement" | "ne_pas_recontacter";
+
+export type EmailStatut = "ok" | "invalide" | "ne_plus_contacter";
 
 export interface SousSection {
   titre: string;
@@ -227,6 +239,11 @@ export interface Database {
           statut: EntrepriseStatut;
           fiche: Fiche | null;
           fiche_generee_at: string | null;
+          politique_candidature: PolitiqueCandidature | null;
+          politique_note: string | null;
+          offre_reperee_titre: string | null;
+          offre_reperee_url: string | null;
+          offres_verifiees_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -246,6 +263,11 @@ export interface Database {
           statut?: EntrepriseStatut;
           fiche?: Fiche | null;
           fiche_generee_at?: string | null;
+          politique_candidature?: PolitiqueCandidature | null;
+          politique_note?: string | null;
+          offre_reperee_titre?: string | null;
+          offre_reperee_url?: string | null;
+          offres_verifiees_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["entreprises"]["Insert"]>;
@@ -265,6 +287,7 @@ export interface Database {
           generique: boolean;
           pays: string | null;
           langue: Langue | null;
+          email_statut: EmailStatut;
           created_at: string;
         };
         Insert: {
@@ -280,6 +303,7 @@ export interface Database {
           generique?: boolean;
           pays?: string | null;
           langue?: Langue | null;
+          email_statut?: EmailStatut;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["contacts"]["Insert"]>;
@@ -392,6 +416,50 @@ export interface Database {
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["reponses_traitees"]["Insert"]>;
+        Relationships: [];
+      };
+      usage_ia: {
+        Row: {
+          id: string;
+          user_id: string;
+          fonction: string;
+          modele: string;
+          tokens_entree: number;
+          tokens_sortie: number;
+          tokens_cache_lecture: number;
+          tokens_cache_ecriture: number;
+          recherches_web: number;
+          cout_usd: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          fonction: string;
+          modele: string;
+          tokens_entree?: number;
+          tokens_sortie?: number;
+          tokens_cache_lecture?: number;
+          tokens_cache_ecriture?: number;
+          recherches_web?: number;
+          cout_usd?: number;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["usage_ia"]["Insert"]>;
+        Relationships: [];
+      };
+      reglages: {
+        Row: {
+          user_id: string;
+          plafond_claude_usd: number;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          plafond_claude_usd?: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reglages"]["Insert"]>;
         Relationships: [];
       };
     };

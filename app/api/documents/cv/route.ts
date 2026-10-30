@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveProfilEtOffre } from "@/lib/api/resolveProfilEtOffre";
 import { genererContenuCV } from "@/lib/anthropic/documents";
 import { buildCvPdf } from "@/lib/documents/pdf";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: resolu.error }, { status: resolu.status });
   }
   const { supabase, user, profil, offre } = resolu;
+  const plafond = await ouvrirUsage(supabase, user.id, "cv");
+  if (plafond) return plafond;
+
 
   try {
     const { contenu, avertissements } = await genererContenuCV(profil, offre);

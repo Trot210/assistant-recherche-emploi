@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { classerReponse, type ClassementReponse } from "@/lib/anthropic/reponses";
-import { ImapNonConfigure, imapConfigure, lireReponsesCandidates } from "@/lib/mail/imap";
+import { lireBilanUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
+import { ImapNonConfigure, imapConfigure, lireReponsesCandidates, lireRebonds } from "@/lib/mail/imap";
+import { analyserRebond, rapprocherRebond } from "@/lib/prospection/rebonds";
 import {
   critereRecherche,
   estExpediteurAutomatique,
@@ -34,6 +36,11 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  // Ici le plafond ne bloque pas la recherche : seul le classement par Claude est
+  // suspendu, les réponses restent lisibles et classables à la main.
+  suivreUsage(supabase, user.id, "classement-reponses");
+  const claudeDisponible = !plafondAtteint(await lireBilanUsage(supabase, user.id).catch(() => ({ depenseMoisUsd: 0, plafondUsd: 0 })));
+
   if (!imapConfigure()) {
     return NextResponse.json({ error: new ImapNonConfigure().message }, { status: 501 });
   }
@@ -124,9 +131,11 @@ export async function POST(request: Request) {
 
     let classement: ClassementReponse;
     if (estExpediteurAutomatique(reponse.fromEmail)) {
-      classement = { type: "automatique", resume: "Message automatique (accusé, absence ou non-distribution).", urls: [] };
+      classement = { type: "automatique", resume: "Message automatique (accusé, absence ou non-distribution).", urls: [], ne_plus_contacter: false };
+    } else if (!claudeDisponible) {
+      classement = { type: "autre", resume: "Non classé : plafond mensuel Claude atteint, choisis le type toi-même.", urls: [], ne_plus_contacter: false };
     } else if (classes >= MAX_CLASSEMENTS) {
-      classement = { type: "autre", resume: "Non classé : limite de classements atteinte pour cette recherche.", urls: [] };
+      classement = { type: "autre", resume: "Non classé : limite de classements atteinte pour cette recherche.", urls: [], ne_plus_contacter: false };
     } else {
       classes += 1;
       try {
@@ -139,7 +148,7 @@ export async function POST(request: Request) {
         });
       } catch (e) {
         console.error("Erreur classement d'une réponse:", e);
-        classement = { type: "autre", resume: "Classement automatique indisponible : choisis le type toi-même.", urls: [] };
+        classement = { type: "autre", resume: "Classement automatique indisponible : choisis le type toi-même.", urls: [], ne_plus_contacter: false };
       }
     }
 
@@ -164,8 +173,52 @@ export async function POST(request: Request) {
     );
   }
 
+  // Rapports de non-distribution : une adresse qui rebondit est proposée comme
+  // invalide, jamais marquée sans ton accord. Si leur lecture échoue, les
+  // réponses déjà lues restent affichées.
+  const adresseUtilisateur = process.env.IMAP_USER ?? process.env.SMTP_USER ?? "";
+  const propositionsRebonds: unknown[] = [];
+  let rebondsIgnores = 0;
+  try {
+    for (const rebond of await lireRebonds({ depuis })) {
+      if (dejaVus.has(rebond.messageId)) {
+        dejaTraites += 1;
+        continue;
+      }
+      const analyse = analyserRebond(rebond, adresseUtilisateur);
+      const rapproche = analyse.definitif ? rapprocherRebond(analyse, rebond.date, envois) : null;
+      if (!rapproche) {
+        rebondsIgnores += 1;
+        continue;
+      }
+      const prospection = infoDe.get(rapproche.prospectionId);
+      const contactId = prospection?.contact_id ?? null;
+      propositionsRebonds.push({
+        message_id: rebond.messageId,
+        prospection_id: rapproche.prospectionId,
+        confiance: "certaine",
+        entreprise: prospection ? (nomEntreprise.get(prospection.entreprise_id) ?? "Entreprise") : "Entreprise",
+        destinataire: contactId ? (nomContact.get(contactId) ?? null) : null,
+        expediteur: { email: "mailer-daemon", nom: "Rapport de non-distribution" },
+        date: rebond.date.toISOString().slice(0, 10),
+        sujet: rebond.sujet,
+        extrait: nettoyerCorps(rebond.texte, 300),
+        adresse_invalide: rapproche.adresse,
+        classement: {
+          type: "non_distribue",
+          resume: `Le message n'a pas été remis : l'adresse ${rapproche.adresse} semble inexistante ou refusée.`,
+          urls: [],
+          ne_plus_contacter: false,
+        },
+      });
+    }
+  } catch (e) {
+    console.error("Erreur lecture des rebonds:", e);
+  }
+
   return NextResponse.json({
-    propositions,
+    propositions: [...propositionsRebonds, ...propositions],
+    rebondsIgnores,
     messagesLus: lues.length,
     dejaTraites,
     sansCandidature,

@@ -1,12 +1,15 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Prospection from "@/components/prospection/Prospection";
+import Prospection, { type Onglet } from "@/components/prospection/Prospection";
 import { gmailConfigure } from "@/lib/gmail/client";
 import { hunterConfigure } from "@/lib/hunter/client";
 import { imapConfigure } from "@/lib/mail/imap";
 import { smtpConfigure } from "@/lib/mail/smtp";
 
-export default async function ProspectionPage() {
+const ONGLETS: Onglet[] = ["entreprises", "messages", "relances"];
+
+export default async function ProspectionPage({ searchParams }: { searchParams: Promise<{ onglet?: string }> }) {
+  const { onglet } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -26,6 +29,7 @@ export default async function ProspectionPage() {
       hunterActif={hunterConfigure()}
       smtpActif={smtpConfigure()}
       imapActif={imapConfigure()}
+      ongletInitial={ONGLETS.find((o) => o === onglet)}
     />
   );
 }

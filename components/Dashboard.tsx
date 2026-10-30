@@ -487,6 +487,9 @@ export default function Dashboard() {
           <button className="action-btn" onClick={() => setInsightsOuvert(true)}>
             Insights
           </button>
+          <Link href="/aujourdhui" className="action-btn">
+            Aujourd&apos;hui
+          </Link>
           <Link href="/prospection" className="action-btn">
             Prospection
           </Link>

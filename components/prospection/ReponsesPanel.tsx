@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { formaterDateFr } from "@/lib/prospection/dates";
+import { politiqueProposee } from "@/lib/prospection/politique";
 import { definitionSuivi, TYPES_REPONSE } from "@/lib/prospection/suivi";
 import type { ReponseType } from "@/types/database.types";
 import type { Prospection } from "@/types/prospection";
@@ -16,7 +17,16 @@ interface Proposition {
   date: string;
   sujet: string;
   extrait: string;
-  classement: { type: ReponseType | "automatique"; resume: string; urls: string[] };
+  // Présent pour un rapport de non-distribution : l'adresse qui a rebondi.
+  adresse_invalide?: string;
+  classement: { type: ReponseType | "automatique"; resume: string; urls: string[]; ne_plus_contacter: boolean };
+}
+
+// Suites que l'utilisateur peut cocher avec la réponse sous les yeux.
+interface Choix {
+  memoriserPolitique: boolean;
+  exclureEntreprise: boolean;
+  nePlusContacter: boolean;
 }
 
 interface Resultat {
@@ -45,6 +55,7 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
   const [resultat, setResultat] = useState<Resultat | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [types, setTypes] = useState<Record<string, ReponseType>>({});
+  const [choix, setChoix] = useState<Record<string, Partial<Choix>>>({});
   const [traitement, setTraitement] = useState<Record<string, { enCours: boolean; erreur: string | null }>>({});
 
   async function rechercher() {
@@ -94,9 +105,27 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
     }
   }
 
+  // Valeurs proposées par défaut : mémoriser « ne conserve pas les spontanées »
+  // pour une réponse de ce type, et ne plus écrire à la personne qui l'a demandé.
+  // Écarter toute l'entreprise n'est jamais coché d'office.
+  function choixDe(p: Proposition, type: ReponseType): Choix {
+    return {
+      memoriserPolitique: politiqueProposee(type) !== null,
+      exclureEntreprise: false,
+      nePlusContacter: p.classement.ne_plus_contacter,
+      ...choix[p.message_id],
+    };
+  }
+
+  function cocher(messageId: string, champ: keyof Choix, valeur: boolean) {
+    setChoix((c) => ({ ...c, [messageId]: { ...c[messageId], [champ]: valeur } }));
+  }
+
   async function associer(p: Proposition) {
     const type = types[p.message_id];
     if (!type) return;
+    const c = choixDe(p, type);
+    const politique = c.exclureEntreprise ? "ne_pas_recontacter" : c.memoriserPolitique ? politiqueProposee(type) : null;
     const data = await appeler(p, "/api/prospection/reponses/enregistrer", {
       message_id: p.message_id,
       prospection_id: p.prospection_id,
@@ -104,6 +133,8 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
       date: p.date,
       extrait: p.extrait,
       url: p.classement.urls[0] ?? null,
+      politique,
+      ne_plus_contacter: c.nePlusContacter,
     });
     if (!data) return;
     onAssociee(data.prospection as Prospection);
@@ -168,6 +199,45 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
                   </a>
                 </p>
               )}
+              {!automatique && (
+                <div style={{ marginTop: 8 }}>
+                  {(() => {
+                    const type = types[p.message_id] ?? "autre";
+                    const c = choixDe(p, type);
+                    const lignes: { champ: keyof Choix; libelle: string }[] = [];
+                    if (type === "non_distribue") {
+                      lignes.push({ champ: "nePlusContacter", libelle: "" });
+                    } else {
+                      if (politiqueProposee(type)) {
+                        lignes.push({ champ: "memoriserPolitique", libelle: "Mémoriser : cette entreprise ne conserve pas les candidatures spontanées" });
+                      }
+                      lignes.push({ champ: "nePlusContacter", libelle: "Ne plus écrire à cette personne (elle l'a demandé)" });
+                      if (type === "refus") lignes.push({ champ: "exclureEntreprise", libelle: "Ne plus contacter cette entreprise" });
+                    }
+                    return (
+                      <>
+                        {type === "non_distribue" && (
+                          <p className="prospection-meta">
+                            L&apos;adresse {p.adresse_invalide ?? "du contact"} sera marquée invalide : plus aucun message ne lui sera proposé.
+                          </p>
+                        )}
+                        {lignes
+                          .filter((l) => l.libelle)
+                          .map((l) => (
+                            <label key={l.champ} className="prospection-meta" style={{ display: "block" }}>
+                              <input
+                                type="checkbox"
+                                checked={c[l.champ]}
+                                onChange={(e) => cocher(p.message_id, l.champ, e.target.checked)}
+                              />{" "}
+                              {l.libelle}
+                            </label>
+                          ))}
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
               <div className="prospection-actions" style={{ marginTop: 10 }}>
                 {!automatique && (
                   <>
@@ -176,7 +246,7 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
                       value={types[p.message_id] ?? "autre"}
                       onChange={(e) => setTypes((t) => ({ ...t, [p.message_id]: e.target.value as ReponseType }))}
                     >
-                      {TYPES_REPONSE.map((type) => (
+                      {TYPES_REPONSE.filter((type) => type !== "non_distribue" || p.classement.type === "non_distribue").map((type) => (
                         <option key={type} value={type}>
                           {definitionSuivi(type).libelle}
                         </option>

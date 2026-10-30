@@ -127,3 +127,30 @@ describe("validerChampsSuivi", () => {
     expect(validerChampsSuivi(null)).toHaveProperty("erreur");
   });
 });
+
+describe("non distribué", () => {
+  const envoye = {
+    id: "p",
+    type: "initial",
+    statut: "envoyee",
+    date_envoi: "2026-10-29",
+    reponse_type: null,
+    reponse_date: null,
+    prochaine_relance: "2026-11-05",
+    nb_relances: 0,
+  } as unknown as Prospection;
+
+  it("clôt le fil sans le compter comme une réponse", () => {
+    const r = appliquerSuivi(envoye, "non_distribue", "2026-10-30", "2026-10-29");
+    if ("erreur" in r) throw new Error(r.erreur);
+    expect(r.patch.statut).toBe("sans_suite");
+    expect(r.patch.reponse_type).toBe("non_distribue");
+    expect(r.patch.prochaine_relance).toBeNull();
+    expect(r.abandonnerRelancesEnCours).toBe(true);
+  });
+
+  it("est reconnu comme tel par le statut de suivi, et « sans suite » reste distinct", () => {
+    expect(idSuivi({ statut: "sans_suite", reponse_type: "non_distribue" })).toBe("non_distribue");
+    expect(idSuivi({ statut: "sans_suite", reponse_type: null })).toBe("sans_suite");
+  });
+});

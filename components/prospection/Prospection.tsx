@@ -14,8 +14,9 @@ import MessageCard, { type CvInfo } from "./MessageCard";
 import CvReference from "./CvReference";
 import MessageEnvoye from "./MessageEnvoye";
 import ReponsesPanel from "./ReponsesPanel";
+import CoutClaude from "@/components/CoutClaude";
 
-type Onglet = "entreprises" | "messages" | "relances";
+export type Onglet = "entreprises" | "messages" | "relances";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
 
 interface Props {
@@ -24,15 +25,16 @@ interface Props {
   hunterActif: boolean;
   smtpActif: boolean;
   imapActif: boolean;
+  ongletInitial?: Onglet;
 }
 
 // Les listes ci-dessous sont chargées en entier : ce volet gère quelques
 // dizaines à quelques centaines d'entreprises ciblées à la main, loin des
 // 1000 lignes que PostgREST renvoie par défaut. Si l'import devait
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
-export default function Prospection({ userId, gmailActif, hunterActif, smtpActif, imapActif }: Props) {
+export default function Prospection({ userId, gmailActif, hunterActif, smtpActif, imapActif, ongletInitial }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const [onglet, setOnglet] = useState<Onglet>("entreprises");
+  const [onglet, setOnglet] = useState<Onglet>(ongletInitial ?? "entreprises");
   const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>("en_cours");
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [contacts, setContacts] = useState<ContactEntreprise[]>([]);
@@ -83,7 +85,10 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
 
   const stats = useMemo(() => {
     const initiaux = prospections.filter((p) => p.type === "initial");
-    const envoyes = initiaux.filter((p) => ["envoyee", "reponse_recue", "sans_suite"].includes(p.statut));
+    // Un message qui n'est pas arrivé (adresse invalide) ne compte ni comme envoyé ni comme sans réponse.
+    const envoyes = initiaux.filter(
+      (p) => ["envoyee", "reponse_recue", "sans_suite"].includes(p.statut) && p.reponse_type !== "non_distribue",
+    );
     const reponses = initiaux.filter((p) => p.statut === "reponse_recue");
     return {
       entreprises: entreprisesActives.length,
@@ -169,6 +174,9 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
           <p className="eyebrow">Candidatures spontanées</p>
         </div>
         <div className="top-actions">
+          <Link href="/aujourdhui" className="action-btn">
+            Aujourd&apos;hui
+          </Link>
           <Link href="/" className="action-btn">
             ← Offres
           </Link>
@@ -199,6 +207,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
       </div>
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
+
+      <CoutClaude />
 
       <CvReference cvs={cvs} onChange={chargerCv} />
 
@@ -254,6 +264,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                 onSupprimee={entrepriseSupprimee}
                 onEntrepriseChange={(maj) => setEntreprises((l) => l.map((e) => (e.id === maj.id ? maj : e)))}
                 onContactAjoute={(c) => setContacts((l) => [...l, c])}
+                onContactMaj={(c) => setContacts((l) => l.map((x) => (x.id === c.id ? c : x)))}
                 onContactSupprime={(id) => setContacts((l) => l.filter((c) => c.id !== id))}
                 onMessageCree={ajouterProspection}
               />

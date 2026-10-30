@@ -18,6 +18,9 @@ const ClassementSchema = z.object({
   resume: z
     .string()
     .describe("Ce que dit la réponse, en une ou deux phrases factuelles (200 caractères maximum), sans jugement"),
+  ne_plus_contacter: z
+    .boolean()
+    .describe("true seulement si la personne demande explicitement à ne plus être contactée ou à ce que ses coordonnées soient supprimées"),
   urls_utiles: z
     .array(z.string())
     .describe("Liens présents dans le message qui servent à candidater (site carrières, offre, page LinkedIn de l'entreprise)"),
@@ -28,6 +31,8 @@ export interface ClassementReponse {
   resume: string;
   // Uniquement des liens réellement écrits dans le message.
   urls: string[];
+  // La personne demande à ne plus être contactée (vérifié par l'utilisateur avant d'agir).
+  ne_plus_contacter: boolean;
 }
 
 export interface ReponseAClasser {
@@ -83,5 +88,6 @@ ${reponse.texte || "(message vide)"}
     type: resultat.parsed_output.type,
     resume: resultat.parsed_output.resume.trim().slice(0, 240),
     urls: resultat.parsed_output.urls_utiles.filter((u) => presentes.has(u)).slice(0, 3),
+    ne_plus_contacter: resultat.parsed_output.ne_plus_contacter,
   };
 }

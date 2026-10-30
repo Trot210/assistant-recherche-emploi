@@ -1,6 +1,7 @@
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { listerIdsMessages, normaliserIdMessage, type CritereRecherche, type ReponseBrute } from "@/lib/prospection/reponses";
+import { EXPEDITEURS_REBOND, type RebondBrut } from "@/lib/prospection/rebonds";
 
 // Lecture des réponses reçues, avec le même mot de passe d'application que
 // l'envoi (SMTP_USER / SMTP_PASSWORD, ou IMAP_USER / IMAP_PASSWORD pour une autre
@@ -120,4 +121,72 @@ export async function lireReponsesCandidates(params: ParametresLecture): Promise
   }
 
   return [...trouvees.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
+}
+
+export interface ParametresRebonds {
+  depuis: Date;
+  max?: number;
+}
+
+// Rapports de non-distribution reçus depuis `depuis` : mêmes garde-fous que la
+// lecture des réponses (lecture seule, rien n'est modifié ni conservé ici). On
+// ne cherche que les expéditeurs « robot » du fournisseur de messagerie.
+export async function lireRebonds(params: ParametresRebonds): Promise<RebondBrut[]> {
+  const { user, pass } = identifiants();
+  if (!user || !pass) throw new ImapNonConfigure();
+
+  const client = new ImapFlow({
+    host: process.env.IMAP_HOST ?? "imap.gmail.com",
+    port: Number(process.env.IMAP_PORT ?? 993),
+    secure: true,
+    auth: { user, pass },
+    logger: false,
+  });
+
+  const trouves = new Map<string, RebondBrut>();
+
+  await client.connect();
+  try {
+    const boites = await client.list();
+    const chemin = boites.find((b) => b.specialUse === "\\All")?.path ?? "INBOX";
+    const verrou = await client.getMailboxLock(chemin, { readOnly: true });
+    try {
+      for (const expediteur of EXPEDITEURS_REBOND) {
+        const uids = await client.search({ from: expediteur, since: params.depuis }, { uid: true });
+        if (!uids || uids.length === 0) continue;
+
+        for await (const message of client.fetch(
+          uids.slice(-(params.max ?? 30)),
+          { uid: true, source: { maxLength: TAILLE_MAX_MESSAGE } },
+          { uid: true },
+        )) {
+          if (!message.source) continue;
+          const analyse = await simpleParser(message.source);
+          const id = normaliserIdMessage(analyse.messageId);
+          if (!id || trouves.has(id)) continue;
+
+          const enTete = analyse.headers.get("x-failed-recipients");
+          const rapport = analyse.attachments
+            .filter((a) => /delivery-status/i.test(a.contentType))
+            .map((a) => a.content.toString("utf8"))
+            .join("\n");
+          const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
+
+          trouves.set(id, {
+            messageId: id,
+            date: analyse.date ?? new Date(),
+            sujet: analyse.subject ?? "",
+            destinatairesEnTete: typeof enTete === "string" ? [enTete] : [],
+            texte: `${brut}\n${rapport}`.slice(0, TEXTE_MAX),
+          });
+        }
+      }
+    } finally {
+      verrou.release();
+    }
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
+
+  return [...trouves.values()].sort((a, b) => b.date.getTime() - a.date.getTime());
 }

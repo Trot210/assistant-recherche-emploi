@@ -16,6 +16,7 @@ export type IdSuivi =
   | "pas_de_poste"
   | "cv_non_conserve"
   | "autre"
+  | "non_distribue"
   | "sans_suite";
 
 export type TonSuivi = "attente" | "positif" | "negatif" | "neutre";
@@ -37,10 +38,19 @@ export const STATUTS_SUIVI: DefinitionSuivi[] = [
   { id: "cv_non_conserve", libelle: "CV non conservé (canal officiel)", statut: "reponse_recue", type: "cv_non_conserve", ton: "neutre" },
   { id: "refus", libelle: "Refus", statut: "reponse_recue", type: "refus", ton: "negatif" },
   { id: "autre", libelle: "Autre retour", statut: "reponse_recue", type: "autre", ton: "neutre" },
+  { id: "non_distribue", libelle: "Non distribué (adresse invalide)", statut: "sans_suite", type: "non_distribue", ton: "negatif" },
   { id: "sans_suite", libelle: "Sans suite", statut: "sans_suite", type: null, ton: "neutre" },
 ];
 
-export const TYPES_REPONSE: ReponseType[] = ["entretien", "offre", "refus", "pas_de_poste", "cv_non_conserve", "autre"];
+export const TYPES_REPONSE: ReponseType[] = [
+  "entretien",
+  "offre",
+  "refus",
+  "pas_de_poste",
+  "cv_non_conserve",
+  "autre",
+  "non_distribue",
+];
 
 export function estTypeReponse(valeur: unknown): valeur is ReponseType {
   return typeof valeur === "string" && (TYPES_REPONSE as string[]).includes(valeur);
@@ -55,7 +65,7 @@ export function definitionSuivi(id: IdSuivi): DefinitionSuivi {
 }
 
 export function idSuivi(p: Pick<Prospection, "statut" | "reponse_type">): IdSuivi {
-  if (p.statut === "sans_suite") return "sans_suite";
+  if (p.statut === "sans_suite") return p.reponse_type === "non_distribue" ? "non_distribue" : "sans_suite";
   if (p.statut === "reponse_recue") return p.reponse_type ?? "reponse";
   return "envoye";
 }
@@ -88,7 +98,8 @@ export function appliquerSuivi(
   if (cible === courant) return { patch: {}, abandonnerRelancesEnCours: false };
 
   const definition = definitionSuivi(cible);
-  const finDeFil = cible === "sans_suite";
+  // « Sans suite » et « non distribué » closent le fil sans qu'il y ait eu de réponse.
+  const finDeFil = definition.statut === "sans_suite";
 
   if (courant === "envoye") {
     const transition = appliquerAction(p, null, finDeFil ? "sans_suite" : "reponse_recue", aujourdhui);
@@ -97,7 +108,7 @@ export function appliquerSuivi(
       patch: {
         ...transition.message,
         reponse_type: definition.type,
-        reponse_date: finDeFil ? null : (dateReponse ?? aujourdhui),
+        reponse_date: cible === "sans_suite" ? null : (dateReponse ?? aujourdhui),
       },
       abandonnerRelancesEnCours: transition.abandonnerRelancesEnCours ?? false,
     };
@@ -111,7 +122,7 @@ export function appliquerSuivi(
     patch: {
       statut: definition.statut,
       reponse_type: definition.type,
-      reponse_date: finDeFil ? null : (p.reponse_date ?? dateReponse ?? aujourdhui),
+      reponse_date: cible === "sans_suite" ? null : (p.reponse_date ?? dateReponse ?? aujourdhui),
     },
     abandonnerRelancesEnCours: false,
   };

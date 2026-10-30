@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { libelleCv, lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
+import { premierBlocage } from "@/lib/prospection/politique";
 import { appliquerAction, aujourdhuiParis } from "@/lib/prospection/workflow";
 
 // Plafond d'envois par jour : au-delà, un compte personnel est vite signalé
@@ -73,6 +74,19 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   if (!contact?.email) {
     return NextResponse.json({ error: "Ce message n'a pas de destinataire avec une adresse e-mail" }, { status: 400 });
+  }
+
+  // Une adresse qui a rebondi, une personne ou une entreprise qui a demandé à ne
+  // plus être contactée : l'envoi est refusé même si le brouillon existe déjà.
+  const { data: entreprise } = await supabase
+    .from("entreprises")
+    .select("nom, politique_candidature")
+    .eq("id", prospection.entreprise_id)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const blocage = entreprise ? premierBlocage(entreprise, contact) : null;
+  if (blocage?.niveau === "interdit") {
+    return NextResponse.json({ error: `Envoi refusé : ${blocage.raison}`, bloque: true }, { status: 409 });
   }
 
   const { count: envoyesAujourdhui } = await supabase

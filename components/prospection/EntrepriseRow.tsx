@@ -5,9 +5,12 @@ import { createClient } from "@/lib/supabase/client";
 import { choisirMeilleurContact } from "@/lib/prospection/contacts";
 import { libelleLangue, suggererLangueContact } from "@/lib/prospection/langue";
 import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
+import { libellePolitique, POLITIQUES, estPolitique } from "@/lib/prospection/politique";
 import type { EntrepriseStatut, Langue } from "@/types/database.types";
+import type { VerificationOffres } from "@/types/offres-entreprise";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import FicheEntreprise from "./FicheEntreprise";
+import OffresEntreprise from "./OffresEntreprise";
 import Confirmation from "./Confirmation";
 import {
   bilanEntreprise,
@@ -28,6 +31,7 @@ interface Props {
   onSupprimee: (entrepriseId: string, idsSupprimes: string[]) => void;
   onEntrepriseChange: (entreprise: Entreprise) => void;
   onContactAjoute: (contact: ContactEntreprise) => void;
+  onContactMaj: (contact: ContactEntreprise) => void;
   onContactSupprime: (contactId: string) => void;
   onMessageCree: (prospection: Prospection) => void;
 }
@@ -41,6 +45,16 @@ const LIBELLES_STATUT: Record<EntrepriseStatut, string> = {
 const EMAIL_VALIDE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const AUTRE = "__autre__";
 
+// Options des étapes qui peuvent rédiger un message : « sansVerification » passe
+// outre une offre déjà publiée, « forcer » outre la politique de l'entreprise.
+interface OptionsRedaction {
+  sansVerification?: boolean;
+  forcer?: boolean;
+}
+
+// Le serveur demande une confirmation avant d'écrire (politique de l'entreprise).
+class ConfirmationPolitique extends Error {}
+
 export default function EntrepriseRow({
   userId,
   hunterActif,
@@ -52,6 +66,7 @@ export default function EntrepriseRow({
   onSupprimee,
   onEntrepriseChange,
   onContactAjoute,
+  onContactMaj,
   onContactSupprime,
   onMessageCree,
 }: Props) {
@@ -76,8 +91,21 @@ export default function EntrepriseRow({
   const [analyse, setAnalyse] = useState(false);
   const [rechercheHunter, setRechercheHunter] = useState(false);
   const [info, setInfo] = useState<string | null>(null);
+  const [verification, setVerification] = useState<VerificationOffres | null>(null);
+  const [verifEnCours, setVerifEnCours] = useState(false);
+  const [offreBloquante, setOffreBloquante] = useState(false);
+  // Ce qu'il faut relancer si tu choisis d'écrire malgré l'offre publiée.
+  const [repriseApresOffre, setRepriseApresOffre] = useState<(() => void) | null>(null);
+  const [confirmation, setConfirmation] = useState<{ raison: string; relancer: () => void } | null>(null);
 
-  async function mettreAJour(champs: Partial<Pick<Entreprise, "statut" | "notes" | "site_web">>) {
+  async function mettreAJour(
+    champs: Partial<
+      Pick<
+        Entreprise,
+        "statut" | "notes" | "site_web" | "politique_candidature" | "politique_note" | "offre_reperee_titre" | "offre_reperee_url"
+      >
+    >,
+  ) {
     setErreur(null);
     const { data, error } = await supabase
       .from("entreprises")
@@ -231,7 +259,12 @@ export default function EntrepriseRow({
 
   // Demande la rédaction d'un message à valider ; la langue est celle choisie,
   // sinon celle suggérée pour le contact côté serveur.
-  async function demanderMessage(posteVise: string, destinataireId: string, langue?: Langue): Promise<Prospection> {
+  async function demanderMessage(
+    posteVise: string,
+    destinataireId: string,
+    langue?: Langue,
+    forcer?: boolean,
+  ): Promise<Prospection> {
     const res = await fetch("/api/prospection/generer", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -240,23 +273,70 @@ export default function EntrepriseRow({
         contact_id: destinataireId || undefined,
         poste_vise: posteVise,
         langue,
+        forcer: forcer || undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 409 && data.code === "politique") throw new ConfirmationPolitique(data.error);
     if (!res.ok) throw new Error(data.error ?? "Erreur lors de la rédaction");
     return data.prospection;
   }
 
-  async function rediger() {
+  // Cherche les offres déjà publiées (gratuit). Renvoie vrai si une offre
+  // correspondante existe, ou si tu en as repéré une toi-même.
+  async function verifierOffres(posteVise: string): Promise<boolean> {
+    setVerifEnCours(true);
+    try {
+      const res = await fetch(`/api/prospection/entreprises/${entreprise.id}/offres`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ poste_vise: posteVise }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de la recherche d'offres");
+      const resultat = data as VerificationOffres;
+      setVerification(resultat);
+      const trouvee = resultat.offres.length > 0 || Boolean(entreprise.offre_reperee_url || entreprise.offre_reperee_titre);
+      setOffreBloquante(trouvee);
+      return trouvee;
+    } finally {
+      setVerifEnCours(false);
+    }
+  }
+
+  async function enregistrerOffreReperee(titre: string, url: string) {
+    await mettreAJour({ offre_reperee_titre: titre || null, offre_reperee_url: url || null });
+  }
+
+  async function basculerContact(contact: ContactEntreprise) {
+    const statut = contact.email_statut === "ok" ? "ne_plus_contacter" : "ok";
+    const { data, error } = await supabase.from("contacts").update({ email_statut: statut }).eq("id", contact.id).select().single();
+    if (error) return setErreur(error.message);
+    onContactMaj(data);
+    if (statut !== "ok" && contactId === contact.id) setContactId("");
+  }
+
+  async function rediger(options: OptionsRedaction = {}) {
     const posteVise = poste === AUTRE ? posteLibre.trim() : poste;
     if (!posteVise) return setErreur("Précise le poste visé");
 
     setRedaction(true);
     setErreur(null);
+    setConfirmation(null);
     try {
-      onMessageCree(await demanderMessage(posteVise, contactId, langueChoix === "auto" ? undefined : langueChoix));
+      if (!options.sansVerification && (await verifierOffres(posteVise).catch(() => false))) {
+        setRepriseApresOffre(() => () => rediger({ ...options, sansVerification: true }));
+        return;
+      }
+      onMessageCree(
+        await demanderMessage(posteVise, contactId, langueChoix === "auto" ? undefined : langueChoix, options.forcer),
+      );
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "Erreur lors de la rédaction");
+      if (e instanceof ConfirmationPolitique) {
+        setConfirmation({ raison: e.message, relancer: () => rediger({ ...options, sansVerification: true, forcer: true }) });
+      } else {
+        setErreur(e instanceof Error ? e.message : "Erreur lors de la rédaction");
+      }
     } finally {
       setRedaction(false);
     }
@@ -265,12 +345,25 @@ export default function EntrepriseRow({
   // Enchaîne tout ce qui peut l'être : analyse, recherche de contacts, choix du
   // destinataire et de la langue, rédaction. Rien n'est envoyé : le message
   // arrive dans « Messages » pour vérification.
-  async function toutPreparer() {
+  async function toutPreparer(options: OptionsRedaction = {}) {
     setErreur(null);
     setInfo(null);
+    setConfirmation(null);
     try {
       let courante = entreprise;
       const tous = [...contacts];
+
+      // D'abord les offres déjà publiées (gratuit) : s'il y en a une, rien n'est
+      // dépensé et rien n'est rédigé tant que tu n'as pas choisi.
+      if (!options.sansVerification) {
+        setPreparation("Recherche des offres déjà publiées...");
+        const posteProbable = courante.fiche?.postes_suggeres[0]?.poste ?? (poste === AUTRE ? posteLibre.trim() : poste);
+        if (await verifierOffres(posteProbable).catch(() => false)) {
+          setRepriseApresOffre(() => () => toutPreparer({ ...options, sansVerification: true }));
+          setOuvert(true);
+          return;
+        }
+      }
 
       if (!courante.fiche) {
         setPreparation("Analyse de l'entreprise...");
@@ -316,9 +409,13 @@ export default function EntrepriseRow({
       setContactId(destinataire.id);
 
       setPreparation("Rédaction du message...");
-      onMessageCree(await demanderMessage(posteVise, destinataire.id));
+      onMessageCree(await demanderMessage(posteVise, destinataire.id, undefined, options.forcer));
     } catch (e) {
-      setErreur(e instanceof Error ? e.message : "Erreur lors de la préparation");
+      if (e instanceof ConfirmationPolitique) {
+        setConfirmation({ raison: e.message, relancer: () => toutPreparer({ ...options, sansVerification: true, forcer: true }) });
+      } else {
+        setErreur(e instanceof Error ? e.message : "Erreur lors de la préparation");
+      }
     } finally {
       setPreparation(null);
     }
@@ -328,7 +425,12 @@ export default function EntrepriseRow({
     <div className={`prospection-ligne${entreprise.statut === "retenue" ? " ok" : ""}`}>
       <div className="prospection-ligne-tete">
         <div>
-          <div className="prospection-titre">{entreprise.nom}</div>
+          <div className="prospection-titre">
+            {entreprise.nom}
+            {entreprise.politique_candidature && (
+              <span className="prospection-meta"> · {libellePolitique(entreprise.politique_candidature)}</span>
+            )}
+          </div>
           <div className="prospection-meta">
             {[entreprise.secteur, entreprise.commune, libelleTranche(entreprise.tranche_effectif)]
               .filter(Boolean)
@@ -390,7 +492,7 @@ export default function EntrepriseRow({
           </label>
 
           <div className="prospection-actions">
-            <button className="action-btn primary" onClick={toutPreparer} disabled={preparation !== null || analyse}>
+            <button className="action-btn primary" onClick={() => toutPreparer()} disabled={preparation !== null || analyse}>
               {preparation ?? "Tout préparer (analyse, contact, langue, message)"}
             </button>
             {hunterActif && <span className="prospection-meta">Utilise 1 recherche Hunter si aucun contact nominatif n&apos;est connu.</span>}
@@ -420,6 +522,46 @@ export default function EntrepriseRow({
           </div>
 
           <label>
+            Politique de candidature (ce que l&apos;entreprise accepte ; une réponse « CV non conservé » la propose
+            automatiquement)
+            <select
+              value={entreprise.politique_candidature ?? ""}
+              onChange={(e) =>
+                mettreAJour({ politique_candidature: estPolitique(e.target.value) ? e.target.value : null })
+              }
+            >
+              <option value="">Non précisée</option>
+              {POLITIQUES.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.libelle}
+                </option>
+              ))}
+            </select>
+            {entreprise.politique_candidature && (
+              <span className="prospection-meta">{POLITIQUES.find((p) => p.id === entreprise.politique_candidature)?.aide}</span>
+            )}
+          </label>
+
+          <OffresEntreprise
+            entreprise={entreprise}
+            verification={verification}
+            enCours={verifEnCours}
+            bloquant={offreBloquante}
+            onVerifier={() => {
+              setErreur(null);
+              verifierOffres(poste === AUTRE ? posteLibre.trim() : poste).catch((e) =>
+                setErreur(e instanceof Error ? e.message : "Erreur lors de la recherche d'offres"),
+              );
+            }}
+            onEcrireQuandMeme={() => {
+              setOffreBloquante(false);
+              if (repriseApresOffre) repriseApresOffre();
+              else toutPreparer({ sansVerification: true });
+            }}
+            onEnregistrerOffreReperee={enregistrerOffreReperee}
+          />
+
+          <label>
             Accroche personnelle (un fait réel sur l&apos;entreprise que tu veux mentionner — sinon le message restera
             sobre)
             <textarea
@@ -439,6 +581,8 @@ export default function EntrepriseRow({
               <div key={c.id} className="prospection-contact">
                 <span>
                   <b>{c.nom}</b>
+                  {c.email_statut === "invalide" && <span className="prospection-erreur"> [adresse invalide]</span>}
+                  {c.email_statut === "ne_plus_contacter" && <span className="prospection-erreur"> [ne plus contacter]</span>}
                   {c.poste && ` — ${c.poste}`}
                   {c.email ? ` — ${c.email}` : " — pas d'e-mail"}
                   {c.source_url ? (
@@ -454,9 +598,14 @@ export default function EntrepriseRow({
                     c.source_email && <span className="prospection-meta"> (source : {c.source_email})</span>
                   )}
                 </span>
-                <button className="prospection-link-btn" onClick={() => supprimerContact(c.id)}>
-                  Supprimer
-                </button>
+                <span>
+                  <button className="prospection-link-btn" onClick={() => basculerContact(c)}>
+                    {c.email_statut === "ok" ? "Ne plus contacter" : "Rétablir"}
+                  </button>{" "}
+                  <button className="prospection-link-btn" onClick={() => supprimerContact(c.id)}>
+                    Supprimer
+                  </button>
+                </span>
               </div>
             ))}
             <div className="prospection-contact-form" style={{ marginTop: 10 }}>
@@ -517,8 +666,9 @@ export default function EntrepriseRow({
                 <select value={contactId} onChange={(e) => setContactId(e.target.value)}>
                   <option value="">Sans contact précis</option>
                   {contacts.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <option key={c.id} value={c.id} disabled={c.email_statut !== "ok"}>
                       {c.nom}
+                      {c.email_statut === "invalide" ? " (adresse invalide)" : c.email_statut === "ne_plus_contacter" ? " (ne plus contacter)" : ""}
                     </option>
                   ))}
                 </select>
@@ -533,7 +683,7 @@ export default function EntrepriseRow({
                   <option value="en">Anglais</option>
                 </select>
               </div>
-              <button className="action-btn primary" onClick={rediger} disabled={redaction || preparation !== null}>
+              <button className="action-btn primary" onClick={() => rediger()} disabled={redaction || preparation !== null}>
                 {redaction ? "Rédaction en cours..." : "Rédiger le message"}
               </button>
             </div>
@@ -541,6 +691,19 @@ export default function EntrepriseRow({
         </div>
       )}
 
+      {confirmation && (
+        <div className="prospection-bloc" style={{ marginTop: 10 }}>
+          <p className="prospection-erreur">{confirmation.raison}</p>
+          <div className="prospection-actions" style={{ marginTop: 8 }}>
+            <button className="action-btn primary" onClick={confirmation.relancer}>
+              Écrire quand même
+            </button>
+            <button className="action-btn" onClick={() => setConfirmation(null)}>
+              Renoncer
+            </button>
+          </div>
+        </div>
+      )}
       {info && <p className="prospection-info" style={{ marginTop: 10 }}>{info}</p>}
       {erreur && <p className="prospection-erreur" style={{ marginTop: 10 }}>{erreur}</p>}
     </div>

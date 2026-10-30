@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveProfilEtOffre } from "@/lib/api/resolveProfilEtOffre";
 import { genererMessageMotivation } from "@/lib/anthropic/documents";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
@@ -20,6 +21,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: resolu.error }, { status: resolu.status });
   }
   const { supabase, user, profil, offre } = resolu;
+
+  const plafond = await ouvrirUsage(supabase, user.id, "message-motivation");
+  if (plafond) return plafond;
+
 
   try {
     const { texte, avertissements } = await genererMessageMotivation(profil, offre);

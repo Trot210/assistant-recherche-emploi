@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { resolveProfilEtOffre } from "@/lib/api/resolveProfilEtOffre";
 import { genererLettreMotivation } from "@/lib/anthropic/documents";
 import { buildLettrePdf } from "@/lib/documents/pdf";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
@@ -19,6 +20,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: resolu.error }, { status: resolu.status });
   }
   const { supabase, user, profil, offre } = resolu;
+  const plafond = await ouvrirUsage(supabase, user.id, "lettre");
+  if (plafond) return plafond;
+
 
   try {
     const { texte: lettre, avertissements } = await genererLettreMotivation(profil, offre);

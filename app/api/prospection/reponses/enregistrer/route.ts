@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { appliquerSuivi, estTypeReponse } from "@/lib/prospection/suivi";
+import { estPolitique } from "@/lib/prospection/politique";
 import { aujourdhuiParis } from "@/lib/prospection/workflow";
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -26,12 +27,18 @@ export async function POST(request: Request) {
   const date: unknown = corps?.date;
   const extrait: unknown = corps?.extrait;
   const url: unknown = corps?.url;
+  // Décisions facultatives de l'utilisateur, prises avec la réponse sous les yeux.
+  const politique: unknown = corps?.politique;
+  const nePlusContacter: unknown = corps?.ne_plus_contacter;
 
   if (typeof messageId !== "string" || !messageId || typeof prospectionId !== "string") {
     return NextResponse.json({ error: "message_id et prospection_id sont requis" }, { status: 400 });
   }
   if (!estTypeReponse(type)) {
     return NextResponse.json({ error: "type de réponse invalide" }, { status: 400 });
+  }
+  if (politique !== undefined && politique !== null && !estPolitique(politique)) {
+    return NextResponse.json({ error: "politique invalide" }, { status: 400 });
   }
   if (date !== undefined && date !== null && (typeof date !== "string" || !DATE.test(date))) {
     return NextResponse.json({ error: "date doit être au format AAAA-MM-JJ" }, { status: 400 });
@@ -87,6 +94,26 @@ export async function POST(request: Request) {
       .eq("parent_id", prospection.id)
       .eq("user_id", user.id)
       .in("statut", ["a_valider", "valide", "brouillon_gmail"]);
+  }
+
+  // Suites choisies par l'utilisateur : politique de l'entreprise, adresse du
+  // contact à ne plus utiliser (rebond ou demande explicite).
+  if (estPolitique(politique)) {
+    const { error: politiqueError } = await supabase
+      .from("entreprises")
+      .update({ politique_candidature: politique })
+      .eq("id", prospection.entreprise_id)
+      .eq("user_id", user.id);
+    if (politiqueError) return NextResponse.json({ error: politiqueError.message }, { status: 500 });
+  }
+  const statutAdresse = nePlusContacter === true ? "ne_plus_contacter" : type === "non_distribue" ? "invalide" : null;
+  if (statutAdresse && prospection.contact_id) {
+    const { error: contactError } = await supabase
+      .from("contacts")
+      .update({ email_statut: statutAdresse })
+      .eq("id", prospection.contact_id)
+      .eq("user_id", user.id);
+    if (contactError) return NextResponse.json({ error: contactError.message }, { status: 500 });
   }
 
   const { error: traiteeError } = await supabase

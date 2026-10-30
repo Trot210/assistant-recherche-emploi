@@ -3,7 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { genererMessageSpontane, genererRelance } from "@/lib/anthropic/prospection";
 import { estEnCours, MAX_RELANCES } from "@/lib/prospection/workflow";
 import { suggererLangueContact } from "@/lib/prospection/langue";
+import { blocageContact, blocageEntreprise, premierBlocage } from "@/lib/prospection/politique";
 import type { Langue } from "@/types/database.types";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 // Génération + contrôle qualité (2 appels Claude séquentiels).
 export const maxDuration = 60;
@@ -21,6 +23,9 @@ export async function POST(request: Request) {
   if (!user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  const plafond = await ouvrirUsage(supabase, user.id, "prospection");
+  if (plafond) return plafond;
+
 
   const body = await request.json().catch(() => null);
   const parentId: unknown = body?.parent_id;
@@ -76,6 +81,10 @@ export async function POST(request: Request) {
           : Promise.resolve({ data: null }),
       ]);
       if (!entreprise) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
+
+      // Une relance ne s'adresse pas à qui a demandé à ne plus être contacté.
+      const interdit = [blocageContact(contact), blocageEntreprise(entreprise)].find((b) => b?.niveau === "interdit");
+      if (interdit) return NextResponse.json({ error: interdit.raison, code: "bloque" }, { status: 409 });
 
       const genere = await genererRelance({
         profil,
@@ -145,6 +154,16 @@ export async function POST(request: Request) {
         : contact
           ? suggererLangueContact(contact).langue
           : "fr";
+
+    // Politique de l'entreprise et état de l'adresse : « ne plus contacter » est
+    // un refus net ; les autres politiques demandent une confirmation (forcer).
+    const blocage = premierBlocage(entreprise, contact);
+    if (blocage?.niveau === "interdit") {
+      return NextResponse.json({ error: blocage.raison, code: "bloque" }, { status: 409 });
+    }
+    if (blocage && body?.forcer !== true) {
+      return NextResponse.json({ error: blocage.raison, code: "politique" }, { status: 409 });
+    }
 
     const genere = await genererMessageSpontane({
       profil,

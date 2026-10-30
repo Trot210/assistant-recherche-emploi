@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveProfilEtOffre } from "@/lib/api/resolveProfilEtOffre";
 import { scoreCompatibilite } from "@/lib/anthropic/scoring";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 export const maxDuration = 60;
 
@@ -17,6 +18,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: resolu.error }, { status: resolu.status });
   }
   const { supabase, user, profil, offre } = resolu;
+  const plafond = await ouvrirUsage(supabase, user.id, "scoring");
+  if (plafond) return plafond;
+
 
   try {
     const resultat = await scoreCompatibilite(profil, offre);

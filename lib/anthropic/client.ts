@@ -1,3 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { fetchAvecUsage } from "@/lib/anthropic/usage";
 
-export const anthropic = new Anthropic();
+// Le fetch personnalisé relève le coût de chaque appel (voir lib/anthropic/usage.ts).
+export const anthropic = new Anthropic({ fetch: fetchAvecUsage });

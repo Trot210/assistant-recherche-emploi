@@ -1,5 +1,5 @@
 import type { Contact as ContactCandidat, Langue } from "@/types/database.types";
-import type { Entreprise } from "@/types/prospection";
+import type { ContactEntreprise, Entreprise } from "@/types/prospection";
 import type { Offre } from "@/types/offre";
 import { libelleTranche } from "@/lib/prospection/secteurs";
 import { resumerFiche } from "@/lib/prospection/fiche";
@@ -19,6 +19,20 @@ const TEXTES: Record<Langue, { cordialement: string; desinscription: string }> =
   },
 };
 
+// D'où vient l'adresse du destinataire, dite en une expression qui suit « provient de » :
+// la personne a le droit de le savoir (RGPD), et ça explique pourquoi on lui écrit.
+export function sourceAdresse(
+  contact: Pick<ContactEntreprise, "origine" | "source_email"> | null | undefined,
+  langue: Langue,
+): string | null {
+  if (!contact) return null;
+  const en = langue === "en";
+  if (contact.origine === "hunter") return en ? "the Hunter.io professional directory" : "l'annuaire professionnel Hunter.io";
+  if (contact.origine === "page_publique") return en ? "your company's website" : "le site de votre entreprise";
+  const saisie = contact.source_email?.trim();
+  return saisie && saisie.length <= 80 ? saisie : null;
+}
+
 function formuleAppel(contactNom: string | null | undefined, langue: Langue): string {
   const nom = contactNom?.trim();
   if (langue === "en") {
@@ -33,6 +47,8 @@ export function assemblerMessage(params: {
   contactNom?: string | null;
   candidat: ContactCandidat;
   langue?: Langue;
+  // Provenance de l'adresse (voir sourceAdresse), ajoutée à la mention de désinscription.
+  source?: string | null;
 }): string {
   const langue = params.langue ?? "fr";
   const signature = [params.candidat.nom, params.candidat.telephone, params.candidat.email]
@@ -44,7 +60,9 @@ export function assemblerMessage(params: {
     params.corps.trim(),
     TEXTES[langue].cordialement,
     signature,
-    TEXTES[langue].desinscription,
+    params.source
+      ? `${langue === "en" ? `Your address comes from ${params.source}.` : `Votre adresse provient de ${params.source}.`} ${TEXTES[langue].desinscription}`
+      : TEXTES[langue].desinscription,
   ]
     .filter(Boolean)
     .join("\n\n");

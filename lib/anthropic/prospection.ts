@@ -2,7 +2,7 @@ import * as z from "zod/v4";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { anthropic } from "@/lib/anthropic/client";
 import { nettoyerMarkdown, tronquer, verifierFidelite } from "@/lib/anthropic/documents";
-import { assemblerMessage, offrePourProspection } from "@/lib/prospection/message";
+import { assemblerMessage, offrePourProspection, sourceAdresse } from "@/lib/prospection/message";
 import { resumerFiche } from "@/lib/prospection/fiche";
 import { aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
@@ -124,7 +124,13 @@ Poste visé : ${posteVise}`,
 
   return {
     objet: tronquer(nettoyerMarkdown(genere.objet), MAX_OBJET),
-    corps: assemblerMessage({ corps, contactNom: nomAPrefixer(contact), candidat: profil.contact, langue }),
+    corps: assemblerMessage({
+      corps,
+      contactNom: nomAPrefixer(contact),
+      candidat: profil.contact,
+      langue,
+      source: sourceAdresse(contact, langue),
+    }),
     avertissements,
   };
 }

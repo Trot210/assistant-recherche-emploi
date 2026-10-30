@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { genererFicheEntreprise } from "@/lib/anthropic/fiche-entreprise";
+import { ouvrirUsage } from "@/lib/anthropic/usage";
 
 // Lecture des pages du site + un appel de synthèse (et au plus une recherche
 // web pour trouver le site) : une vingtaine de secondes en général.
@@ -20,6 +21,9 @@ export async function POST(_request: Request, { params }: { params: Promise<{ id
   if (!user) {
     return NextResponse.json({ error: "Non authentifié" }, { status: 401 });
   }
+  const plafond = await ouvrirUsage(supabase, user.id, "fiche-entreprise");
+  if (plafond) return plafond;
+
 
   const { data: entreprise, error } = await supabase
     .from("entreprises")

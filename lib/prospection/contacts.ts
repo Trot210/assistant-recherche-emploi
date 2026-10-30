@@ -35,7 +35,8 @@ function score(contact: ContactEntreprise, posteVise: string): number {
 // contacts qui ont une adresse e-mail ; on préfère un responsable du métier visé
 // à un recruteur, puis un recruteur à une adresse générique.
 export function choisirMeilleurContact(contacts: ContactEntreprise[], posteVise: string): ContactEntreprise | null {
-  const joignables = contacts.filter((c) => c.email);
+  // Une adresse qui a rebondi ou dont le titulaire ne veut plus être contacté n'est jamais proposée.
+  const joignables = contacts.filter((c) => c.email && (c.email_statut ?? "ok") === "ok");
   if (joignables.length === 0) return null;
   return [...joignables].sort((a, b) => score(b, posteVise) - score(a, posteVise))[0];
 }

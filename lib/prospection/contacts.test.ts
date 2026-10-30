@@ -16,6 +16,7 @@ function contact(surcharge: Partial<ContactEntreprise>): ContactEntreprise {
     generique: false,
     pays: null,
     langue: null,
+    email_statut: "ok",
     created_at: "2026-10-29T00:00:00Z",
     ...surcharge,
   };
@@ -49,5 +50,13 @@ describe("choisirMeilleurContact", () => {
     const manager = contact({ id: "m", poste: "National Retail Sales Manager" });
     expect(choisirMeilleurContact([superviseur, manager], "Chef de Produit")?.id).toBe("m");
     expect(choisirMeilleurContact([manager, superviseur], "Chef de Produit")?.id).toBe("m");
+  });
+
+  it("ne propose jamais une adresse invalide ou dont le titulaire ne veut plus être contacté", () => {
+    const rebond = contact({ id: "a", poste: "Head of Trade Marketing", email_statut: "invalide" });
+    const refus = contact({ id: "b", poste: "Director Trade Marketing", email_statut: "ne_plus_contacter" });
+    const bon = contact({ id: "c", poste: "Assistant" });
+    expect(choisirMeilleurContact([rebond, refus, bon], "Trade Marketing")?.id).toBe("c");
+    expect(choisirMeilleurContact([rebond, refus], "Trade Marketing")).toBeNull();
   });
 });
