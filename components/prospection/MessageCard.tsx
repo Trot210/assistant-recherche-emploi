@@ -4,6 +4,7 @@ import { useState } from "react";
 import { libelleLangue } from "@/lib/prospection/langue";
 import { formaterProgrammation, localVersInstant, validerProgrammation } from "@/lib/prospection/planification";
 import { estEnvoye, peutSupprimerMessage, texteSuppressionMessage } from "@/lib/prospection/suppression";
+import AdresseDestinataire from "./AdresseDestinataire";
 import Confirmation from "./Confirmation";
 import type { Langue, ProspectionStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
@@ -275,6 +276,10 @@ export default function MessageCard({
             </p>
           )}
 
+          {modifiable && !modifie && !contact?.email && (
+            <AdresseDestinataire prospection={prospection} contact={contact} onEnregistree={onFilModifie} />
+          )}
+
           {smtpActif && (prospection.statut === "valide" || prospection.statut === "brouillon_gmail") && !modifie && (
             <div className="prospection-bloc" style={{ marginBottom: 0, background: "var(--paper)" }}>
               <h3>Vérification avant envoi</h3>
@@ -347,6 +352,12 @@ export default function MessageCard({
                   </button>
                 )}
               </div>
+              {!contact?.email && (
+                <p className="prospection-erreur" style={{ marginTop: 10 }}>
+                  Envoi et programmation impossibles tant que le destinataire n&apos;a pas d&apos;adresse e-mail : renseigne-la dans le
+                  bloc « Adresse e-mail du destinataire » ci-dessus.
+                </p>
+              )}
               {programmerOuvert && (
                 <div style={{ marginTop: 12 }}>
                   <label>
