@@ -62,6 +62,9 @@ export interface EnvoiConnu {
 
 export interface ReponseBrute {
   messageId: string;
+  // Identifiant tel qu'écrit dans le message (casse et chevrons conservés) : seul celui-là
+  // permet d'y répondre dans le même fil.
+  messageIdBrut?: string;
   inReplyTo: string | null;
   references: string[];
   fromEmail: string;

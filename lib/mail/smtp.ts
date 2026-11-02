@@ -13,6 +13,9 @@ export interface MessageSortant {
   pieceJointe?: { nomFichier: string; contenu: Buffer };
   // Identifiant du message d'origine, pour qu'une relance s'affiche dans le même fil.
   repondA?: string | null;
+  // Autres messages du fil (du plus ancien au plus récent), pour qu'une réponse
+  // s'affiche dans la conversation complète chez le destinataire.
+  references?: string[];
 }
 
 export function smtpConfigure(): boolean {
@@ -37,6 +40,12 @@ export function construireOptions(message: MessageSortant, expediteur: string): 
   refuserSautsDeLigne("Le destinataire", message.a);
   refuserSautsDeLigne("L'objet", message.objet);
   if (message.repondA) refuserSautsDeLigne("L'identifiant du fil", message.repondA);
+  for (const ref of message.references ?? []) refuserSautsDeLigne("L'identifiant du fil", ref);
+  const fil = [...(message.references ?? []), ...(message.repondA ? [message.repondA] : [])]
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .map((id) => (id.startsWith("<") ? id : `<${id}>`))
+    .filter((id, i, tous) => tous.indexOf(id) === i);
 
   return {
     from: message.nomExpediteur
@@ -45,7 +54,7 @@ export function construireOptions(message: MessageSortant, expediteur: string): 
     to: message.a,
     subject: message.objet,
     text: message.corps,
-    ...(message.repondA ? { inReplyTo: message.repondA, references: message.repondA } : {}),
+    ...(fil.length > 0 ? { inReplyTo: fil[fil.length - 1], references: fil } : {}),
     ...(message.pieceJointe
       ? {
           attachments: [

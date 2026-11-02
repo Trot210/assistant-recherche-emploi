@@ -499,6 +499,32 @@ export interface Database {
           },
         ];
       };
+      reponses_envoyees: {
+        Row: {
+          id: string;
+          user_id: string;
+          prospection_id: string | null;
+          cle: string;
+          destinataire: string;
+          objet: string;
+          corps: string;
+          smtp_message_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          prospection_id?: string | null;
+          cle: string;
+          destinataire: string;
+          objet: string;
+          corps: string;
+          smtp_message_id?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reponses_envoyees"]["Insert"]>;
+        Relationships: [];
+      };
       conseils_reponses: {
         Row: {
           id: string;

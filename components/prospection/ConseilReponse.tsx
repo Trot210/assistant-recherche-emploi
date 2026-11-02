@@ -38,6 +38,9 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
   const [corps, setCorps] = useState("");
   const [copie, setCopie] = useState(false);
   const [actionNotee, setActionNotee] = useState(false);
+  // Réponse déjà envoyée depuis le site, et confirmation en cours avant un nouvel envoi.
+  const [envoyee, setEnvoyee] = useState<{ destinataire: string; le: string } | null>(null);
+  const [confirmation, setConfirmation] = useState({ ouverte: false, enCours: false, erreur: null as string | null });
 
   function afficher(c: Conseil | null) {
     setConseil(c);
@@ -56,6 +59,7 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
         if (!actif || !data?.conseil) return;
         afficher(data.conseil as Conseil);
         setAnalyseLe(data.analyse_le ?? null);
+        setEnvoyee(data.envoyee ?? null);
       })
       .catch(() => undefined);
     return () => {
@@ -90,6 +94,25 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
     }
   }
 
+  // Un clic sur « Oui, envoyer » = un envoi, avec le texte exact affiché. Le serveur
+  // refait tous les contrôles et refuse un second envoi de la même réponse.
+  async function envoyer() {
+    setConfirmation({ ouverte: true, enCours: true, erreur: null });
+    try {
+      const res = await fetch(`/api/prospection/${prospectionId}/conseil-reponse/envoyer`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ objet, corps }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur lors de l'envoi");
+      setEnvoyee({ destinataire: data.destinataire, le: data.envoye_le });
+      setConfirmation({ ouverte: false, enCours: false, erreur: null });
+    } catch (e) {
+      setConfirmation({ ouverte: true, enCours: false, erreur: e instanceof Error ? e.message : "Erreur lors de l'envoi" });
+    }
+  }
+
   async function noterAction() {
     if (!conseil) return;
     const texte = conseil.relance_date ? "Reprendre contact (voir le conseil sur la réponse)" : conseil.action_suggeree;
@@ -99,6 +122,7 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
 
   const aCompleter = passagesACompleter(corps);
   const destinataire = conseil?.interlocuteur.email ?? "";
+  const peutEnvoyer = Boolean(conseil && !conseil.ne_plus_contacter && destinataire && aCompleter.length === 0 && corps.trim() && objet.trim());
 
   return (
     <div className="prospection-bloc" style={{ marginTop: 4 }}>
@@ -187,7 +211,7 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
                 Exemple de réponse
               </div>
               <p className="prospection-meta" style={{ margin: "0 0 6px" }}>
-                À relire et adapter : tu l&apos;envoies toi-même depuis ta messagerie.
+                À relire et adapter : rien ne part sans ta confirmation.
                 {conseil.recommandation === "agir_d_abord" && " À envoyer seulement après avoir fait l'action indiquée ci-dessus."}
               </p>
               <label>
@@ -228,7 +252,50 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
                 >
                   Ouvrir dans ma messagerie
                 </a>
+                {!envoyee && (
+                  <button
+                    className="action-btn primary"
+                    onClick={() => setConfirmation({ ouverte: true, enCours: false, erreur: null })}
+                    disabled={!peutEnvoyer}
+                    title={peutEnvoyer ? undefined : "Complète d'abord les passages entre crochets"}
+                  >
+                    Envoyer cette réponse
+                  </button>
+                )}
               </div>
+              {envoyee && (
+                <p className="prospection-info" style={{ marginTop: 8 }}>
+                  Réponse envoyée à {envoyee.destinataire} le {formaterDateFr(envoyee.le.slice(0, 10))}, dans la conversation.
+                </p>
+              )}
+              {confirmation.ouverte && !envoyee && (
+                <div className="prospection-confirmation" role="alertdialog" aria-live="polite" style={{ marginTop: 10 }}>
+                  <p>
+                    <strong>Envoyer ce message maintenant ?</strong> Il part de ta boîte Gmail, dans la conversation, et ne peut pas être
+                    rappelé.
+                  </p>
+                  <p className="prospection-meta" style={{ margin: 0 }}>
+                    À : {conseil.interlocuteur.nom ? `${conseil.interlocuteur.nom} ` : ""}&lt;{destinataire}&gt;
+                  </p>
+                  <p className="prospection-meta" style={{ margin: "0 0 6px" }}>
+                    Objet : {objet}
+                  </p>
+                  <div className="prospection-texte">{corps}</div>
+                  <div className="prospection-actions" style={{ marginTop: 8 }}>
+                    <button className="action-btn danger" onClick={envoyer} disabled={confirmation.enCours}>
+                      {confirmation.enCours ? "Envoi..." : "Oui, envoyer"}
+                    </button>
+                    <button
+                      className="prospection-link-btn"
+                      onClick={() => setConfirmation({ ouverte: false, enCours: false, erreur: null })}
+                      disabled={confirmation.enCours}
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                  {confirmation.erreur && <p className="prospection-erreur">{confirmation.erreur}</p>}
+                </div>
+              )}
             </div>
           ) : (
             <p className="prospection-meta" style={{ margin: 0 }}>

@@ -107,6 +107,7 @@ export async function lireReponsesCandidates(params: ParametresLecture): Promise
           const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
           trouvees.set(id, {
             messageId: id,
+            messageIdBrut: analyse.messageId?.trim() || undefined,
             inReplyTo: normaliserIdMessage(analyse.inReplyTo),
             references: listerIdsMessages(analyse.references),
             fromEmail: adresse,

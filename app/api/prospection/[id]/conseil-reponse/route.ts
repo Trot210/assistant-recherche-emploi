@@ -31,10 +31,22 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
   if (!data) return NextResponse.json({ conseil: null });
 
+  // Dernière réponse envoyée depuis le site pour cette candidature (table absente : on l'ignore).
+  const { data: envoyee } = await supabase
+    .from("reponses_envoyees")
+    .select("destinataire, created_at")
+    .eq("prospection_id", id)
+    .eq("user_id", user.id)
+    .not("smtp_message_id", "is", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   return NextResponse.json({
     conseil: data.contenu as unknown as ConseilReponse,
     reponse_date: data.reponse_date,
     analyse_le: data.created_at,
+    envoyee: envoyee ? { destinataire: envoyee.destinataire, le: envoyee.created_at } : null,
   });
 }
 

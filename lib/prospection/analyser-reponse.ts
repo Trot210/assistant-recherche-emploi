@@ -53,6 +53,7 @@ export async function analyserReponse(
   // 1. Le message complet, relu dans la boîte mail (lecture seule).
   let reponse: ReponseRecue | null = null;
   let messageId: string | null = null;
+  let messageIdBrut: string | null = null;
   let avisLecture: string | null = null;
 
   const critere = contact?.email ? critereRecherche(contact.email) : null;
@@ -82,6 +83,7 @@ export async function analyserReponse(
       });
       if (choisie) {
         messageId = choisie.messageId;
+        messageIdBrut = choisie.messageIdBrut ?? null;
         reponse = {
           expediteurNom: choisie.fromNom,
           expediteurEmail: choisie.fromEmail,
@@ -118,7 +120,7 @@ export async function analyserReponse(
   }
 
   try {
-    const conseil = await conseillerSurReponse({
+    const conseilBrut = await conseillerSurReponse({
       profil,
       entreprise,
       contact,
@@ -126,6 +128,7 @@ export async function analyserReponse(
       reponse,
       source: messageId ? "message" : "extrait",
     });
+    const conseil: ConseilReponse = { ...conseilBrut, reponse_message_id: messageIdBrut };
 
     const { error: enregistrementError } = await supabase.from("conseils_reponses").upsert(
       {

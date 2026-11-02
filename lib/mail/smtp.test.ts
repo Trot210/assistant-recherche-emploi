@@ -56,3 +56,26 @@ describe("construireOptions", () => {
     expect(() => construireOptions({ a: "x@y.fr", objet: "O\r\nBcc: z@y.fr", corps: "C" }, "l@g.com")).toThrow(/saut de ligne/);
   });
 });
+
+describe("construireOptions : réponse dans un fil", () => {
+  it("cite toute la conversation, chevrons ajoutés si absents et sans doublon", async () => {
+    const mime = await rendre(
+      construireOptions(
+        {
+          a: "marie@exemple.fr",
+          objet: "Re: Candidature",
+          corps: "Texte",
+          references: ["abc@gmail.com", "<Reponse-1@exemple.fr>"],
+          repondA: "<Reponse-1@exemple.fr>",
+        },
+        "lucien@gmail.com",
+      ),
+    );
+    expect(mime).toContain("In-Reply-To: <Reponse-1@exemple.fr>");
+    expect(mime).toMatch(/References: <abc@gmail\.com>\s+<Reponse-1@exemple\.fr>/);
+  });
+
+  it("refuse un saut de ligne dans une référence", () => {
+    expect(() => construireOptions({ a: "a@b.fr", objet: "x", corps: "y", references: ["<a>\nBcc: z@z.fr"] }, "l@g.com")).toThrow();
+  });
+});

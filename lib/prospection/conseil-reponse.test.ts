@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   appliquerRegles,
   choisirReponse,
+  cleEnvoiReponse,
+  refusEnvoiReponse,
   dateRelance,
   lienMailto,
   objetReponse,
@@ -137,5 +139,56 @@ describe("passagesACompleter", () => {
 
   it("ne trouve rien dans un texte complet", () => {
     expect(passagesACompleter("Merci pour votre retour.")).toEqual([]);
+  });
+});
+
+describe("cleEnvoiReponse", () => {
+  it("utilise l'identifiant du message reçu quand il est connu", () => {
+    expect(cleEnvoiReponse({ messageId: "abc@x", reponseDate: "2026-11-02", prospectionId: "p1" })).toBe("msg:abc@x");
+  });
+
+  it("retombe sur la candidature et la date sans identifiant", () => {
+    expect(cleEnvoiReponse({ messageId: null, reponseDate: "2026-11-02", prospectionId: "p1" })).toBe("extrait:p1:2026-11-02");
+  });
+});
+
+describe("refusEnvoiReponse", () => {
+  const base = {
+    conseil: conseil({ interlocuteur: { nom: "A", poste: null, email: "a@exemple.test" } }),
+    objet: "Re: test",
+    corps: "Bonjour,\n\nMerci.",
+    adresseUtilisateur: "moi@exemple.test",
+  };
+
+  it("autorise un envoi complet", () => {
+    expect(refusEnvoiReponse(base)).toBeNull();
+  });
+
+  it("refuse quand la personne demande à ne plus être contactée", () => {
+    expect(refusEnvoiReponse({ ...base, conseil: { ...base.conseil, ne_plus_contacter: true } })).toMatch(/ne plus être contactée/);
+  });
+
+  it("refuse quand l'analyse conseille de ne pas répondre", () => {
+    expect(refusEnvoiReponse({ ...base, conseil: { ...base.conseil, recommandation: "ne_pas_repondre" } })).toMatch(/ne pas répondre/);
+    expect(refusEnvoiReponse({ ...base, conseil: { ...base.conseil, recommandation: "attendre" } })).not.toBeNull();
+  });
+
+  it("refuse un destinataire absent, invalide ou égal à soi-même", () => {
+    const sans = (email: string | null) => ({ ...base.conseil, interlocuteur: { nom: null, poste: null, email } });
+    expect(refusEnvoiReponse({ ...base, conseil: sans(null) })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, conseil: sans("pas une adresse") })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, conseil: sans("Moi@Exemple.test") })).toMatch(/propre adresse/);
+  });
+
+  it("refuse un objet ou un message vide, trop long ou avec saut de ligne dans l'objet", () => {
+    expect(refusEnvoiReponse({ ...base, objet: "  " })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, objet: "a\nBcc: x@y.fr" })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, objet: "a".repeat(201) })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, corps: "" })).not.toBeNull();
+    expect(refusEnvoiReponse({ ...base, corps: "a".repeat(5001) })).not.toBeNull();
+  });
+
+  it("refuse tant qu'il reste un passage à compléter", () => {
+    expect(refusEnvoiReponse({ ...base, corps: "J'ai postulé à [intitulé de l'offre]." })).toMatch(/intitulé de l'offre/);
   });
 });

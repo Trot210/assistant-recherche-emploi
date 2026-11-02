@@ -78,6 +78,8 @@ export interface ConseilReponse {
   source: "message" | "extrait";
   // Avertissements du contrôle de fidélité sur le brouillon.
   avertissements: string[];
+  // Identifiant (brut) du message reçu : la réponse envoyée s'y rattache dans le fil.
+  reponse_message_id?: string | null;
 }
 
 // Cohérence entre la recommandation et le brouillon, appliquée par le code et non
@@ -147,4 +149,45 @@ export function lienMailto(params: { destinataire: string; objet: string; corps:
 // l'offre] ») : l'interface prévient tant qu'il en reste.
 export function passagesACompleter(texte: string): string[] {
   return [...texte.matchAll(/\[([^\]\n]{1,80})\]/g)].map((m) => m[1]);
+}
+
+// --- Envoi d'une réponse depuis le site -----------------------------------
+
+export const OBJET_MAX = 200;
+export const CORPS_MAX = 5000;
+
+// Clé qui identifie « la réponse reçue à laquelle on répond » : l'envoi d'une
+// réponse est verrouillé par cette clé, une même réponse ne reçoit pas deux messages.
+export function cleEnvoiReponse(params: { messageId: string | null; reponseDate: string | null; prospectionId: string }): string {
+  return params.messageId ? `msg:${params.messageId}` : `extrait:${params.prospectionId}:${params.reponseDate ?? "?"}`;
+}
+
+const EMAIL = /^[^\s@<>,;"]+@[^\s@<>,;"]+\.[^\s@<>,;"]+$/;
+
+// Contrôles faits côté serveur avant tout envoi, quoi qu'affiche l'interface :
+// renvoie la raison du refus, ou null si l'envoi est permis. Le destinataire vient
+// du conseil enregistré (l'expéditeur de la réponse), jamais du navigateur.
+export function refusEnvoiReponse(params: {
+  conseil: Pick<ConseilReponse, "recommandation" | "ne_plus_contacter" | "interlocuteur">;
+  objet: string;
+  corps: string;
+  adresseUtilisateur: string;
+}): string | null {
+  const { conseil, objet, corps } = params;
+  if (conseil.ne_plus_contacter) return "Cette personne a demandé à ne plus être contactée : aucun message ne peut lui être envoyé.";
+  if (!recommandationAvecBrouillon(conseil.recommandation)) {
+    return "L'analyse recommande de ne pas répondre ici : aucun message n'est proposé à l'envoi.";
+  }
+  const destinataire = conseil.interlocuteur.email?.trim() ?? "";
+  if (!EMAIL.test(destinataire)) return "Aucune adresse de destinataire fiable pour cette réponse.";
+  if (destinataire.toLowerCase() === params.adresseUtilisateur.trim().toLowerCase()) {
+    return "Le destinataire est ta propre adresse.";
+  }
+  if (!objet.trim() || /[\r\n]/.test(objet)) return "L'objet est vide ou contient un saut de ligne.";
+  if (objet.length > OBJET_MAX) return `L'objet dépasse ${OBJET_MAX} caractères.`;
+  if (!corps.trim()) return "Le message est vide.";
+  if (corps.length > CORPS_MAX) return `Le message dépasse ${CORPS_MAX} caractères.`;
+  const aCompleter = passagesACompleter(corps);
+  if (aCompleter.length > 0) return `Il reste à compléter : ${aCompleter.map((p) => `[${p}]`).join(", ")}.`;
+  return null;
 }
