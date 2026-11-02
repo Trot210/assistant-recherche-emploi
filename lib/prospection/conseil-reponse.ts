@@ -138,13 +138,6 @@ export function objetReponse(sujetRecu: string | null | undefined, sujetEnvoye: 
   return /^(re|réf|ref)\s*:/i.test(base) ? base : `Re: ${base}`;
 }
 
-// Lien qui ouvre un nouveau message dans la messagerie par défaut de l'utilisateur,
-// pré-rempli : il le relit, le modifie et l'envoie lui-même.
-export function lienMailto(params: { destinataire: string; objet: string; corps: string }): string {
-  const sauts = params.corps.replace(/\r?\n/g, "\r\n");
-  return `mailto:${encodeURIComponent(params.destinataire)}?subject=${encodeURIComponent(params.objet)}&body=${encodeURIComponent(sauts)}`;
-}
-
 // Un exemple peut contenir un passage à compléter entre crochets (« [titre de
 // l'offre] ») : l'interface prévient tant qu'il en reste.
 export function passagesACompleter(texte: string): string[] {

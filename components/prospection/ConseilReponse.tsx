@@ -5,7 +5,6 @@ import { formaterDateFr } from "@/lib/prospection/dates";
 import {
   LIBELLE_CATEGORIE,
   LIBELLE_RECOMMANDATION,
-  lienMailto,
   passagesACompleter,
   type ConseilReponse as Conseil,
 } from "@/lib/prospection/conseil-reponse";
@@ -245,13 +244,6 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
                 <button className="action-btn" onClick={copier}>
                   {copie ? "Copié" : "Copier le message"}
                 </button>
-                <a
-                  className="action-btn"
-                  style={{ textDecoration: "none" }}
-                  href={lienMailto({ destinataire, objet, corps })}
-                >
-                  Ouvrir dans ma messagerie
-                </a>
                 {!envoyee && (
                   <button
                     className="action-btn primary"

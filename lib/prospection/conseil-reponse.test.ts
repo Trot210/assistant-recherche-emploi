@@ -5,7 +5,6 @@ import {
   cleEnvoiReponse,
   refusEnvoiReponse,
   dateRelance,
-  lienMailto,
   objetReponse,
   passagesACompleter,
   recommandationAvecBrouillon,
@@ -120,15 +119,6 @@ describe("objetReponse", () => {
 
   it("retombe sur l'objet envoyé", () => {
     expect(objetReponse("", "Candidature")).toBe("Re: Candidature");
-  });
-});
-
-describe("lienMailto", () => {
-  it("encode l'objet et le corps, avec des retours à la ligne mail", () => {
-    const lien = lienMailto({ destinataire: "a@exemple.test", objet: "Re: Café & thé", corps: "Bonjour,\n\nMerci" });
-    expect(lien.startsWith("mailto:a%40exemple.test?subject=")).toBe(true);
-    expect(lien).toContain("Re%3A%20Caf%C3%A9%20%26%20th%C3%A9");
-    expect(lien).toContain("Bonjour%2C%0D%0A%0D%0AMerci");
   });
 });
 
