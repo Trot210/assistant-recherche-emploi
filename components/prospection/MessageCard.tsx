@@ -8,6 +8,7 @@ import AdresseDestinataire from "./AdresseDestinataire";
 import Confirmation from "./Confirmation";
 import type { Langue, ProspectionStatut } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
+import { jourDeRelance } from "@/lib/prospection/workflow";
 
 export interface CvInfo {
   nomFichier: string;
@@ -206,7 +207,7 @@ export default function MessageCard({
             {contact ? `${contact.nom}${contact.email ? ` <${contact.email}>` : " (pas d'e-mail)"}` : "Sans contact précis"}
             {prospection.date_envoi && ` · envoyé le ${formaterDate(prospection.date_envoi)}`}
             {prospection.prochaine_relance && prospection.statut === "envoyee" &&
-              ` · relance prévue le ${formaterDate(prospection.prochaine_relance)}`}
+              ` · relance prévue le ${formaterDate(jourDeRelance(prospection.prochaine_relance))}`}
           </div>
         </div>
         <div className="prospection-actions">

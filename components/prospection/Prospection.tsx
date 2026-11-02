@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formaterDateFr } from "@/lib/prospection/dates";
 import { estEnvoye } from "@/lib/prospection/suppression";
-import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
+import { aujourdhuiParis, estEnCours, jourDeRelance, relanceDue } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection as ProspectionRow } from "@/types/prospection";
 import RechercheEntreprises from "./RechercheEntreprises";
@@ -14,12 +14,13 @@ import MessageCard, { type CvInfo } from "./MessageCard";
 import CvReference from "./CvReference";
 import EmployeursQuiRecrutent from "./EmployeursQuiRecrutent";
 import EnvoisProgrammes from "./EnvoisProgrammes";
+import Bilan from "./Bilan";
 import MessageEnvoye from "./MessageEnvoye";
 import ReponsesPanel from "./ReponsesPanel";
 import CoutClaude from "@/components/CoutClaude";
 import { calculerPriorite, type Priorite } from "@/lib/prospection/priorite";
 
-export type Onglet = "entreprises" | "messages" | "relances" | "programmes";
+export type Onglet = "entreprises" | "messages" | "relances" | "programmes" | "bilan";
 type FiltreMessages = "en_cours" | "envoyes" | "tous";
 type TriEntreprises = "recentes" | "priorite";
 
@@ -246,6 +247,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             ["messages", `Messages (${stats.aTraiter} en cours)`],
             ["relances", `Relances (${stats.relancesDues} dues)`],
             ["programmes", `Programmés (${envois.filter((x) => x.statut === "programme" || x.statut === "en_cours").length})`],
+            ["bilan", "Bilan"],
           ] as [Onglet, string][]
         ).map(([id, libelle]) => (
           <button key={id} className={`chip${onglet === id ? " active" : ""}`} onClick={() => setOnglet(id)}>
@@ -393,6 +395,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
         </>
       )}
 
+      {!chargement && onglet === "bilan" && <Bilan prospections={prospections} contacts={contacts} entreprises={entreprises} />}
+
       {!chargement && onglet === "programmes" && (
         <EnvoisProgrammes envois={envois} prospections={prospections} entreprises={entreprises} contacts={contacts} onChange={charger} />
       )}
@@ -439,7 +443,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                     </div>
                     <div className="prospection-meta">
                       Envoyé le {p.date_envoi} · {p.nb_relances} relance(s) déjà envoyée(s) · prochaine le{" "}
-                      {p.prochaine_relance}
+                      {jourDeRelance(p.prochaine_relance as string)}
                       {due && " — à faire maintenant"}
                     </div>
                   </div>

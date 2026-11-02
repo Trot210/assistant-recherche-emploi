@@ -4,6 +4,8 @@ import {
   ajouterJours,
   appliquerAction,
   calculerProchaineRelance,
+  estJourDeRelance,
+  jourDeRelance,
   relanceDue,
 } from "@/lib/prospection/workflow";
 
@@ -54,7 +56,7 @@ describe("calendrier de relance", () => {
   });
 
   it("ne signale une relance due que pour un message envoyé dont la date est passée", () => {
-    const envoye = { statut: "envoyee" as const, prochaine_relance: "2026-11-05" };
+    const envoye = { statut: "envoyee" as const, prochaine_relance: "2026-11-05" }; // jeudi
     expect(relanceDue(envoye, "2026-11-04")).toBe(false);
     expect(relanceDue(envoye, "2026-11-05")).toBe(true);
     expect(relanceDue({ ...envoye, statut: "reponse_recue" }, "2026-11-10")).toBe(false);
@@ -120,5 +122,29 @@ describe("appliquerAction", () => {
 
   it("refuse de clôturer un message jamais envoyé", () => {
     expect(appliquerAction(prospection(), null, "sans_suite", "2026-10-29")).toHaveProperty("erreur");
+  });
+});
+
+describe("jour de relance", () => {
+  it("reconnaît mardi, mercredi et jeudi, hors jours fériés", () => {
+    expect(estJourDeRelance("2026-11-10")).toBe(true); // mardi
+    expect(estJourDeRelance("2026-11-12")).toBe(true); // jeudi
+    expect(estJourDeRelance("2026-11-09")).toBe(false); // lundi
+    expect(estJourDeRelance("2026-11-13")).toBe(false); // vendredi
+    expect(estJourDeRelance("2026-11-14")).toBe(false); // samedi
+    expect(estJourDeRelance("2026-11-11")).toBe(false); // mercredi férié
+  });
+
+  it("reporte une date prévue au prochain mardi–jeudi, sans toucher à un jour valide", () => {
+    expect(jourDeRelance("2026-11-10")).toBe("2026-11-10");
+    expect(jourDeRelance("2026-11-09")).toBe("2026-11-10"); // lundi -> mardi
+    expect(jourDeRelance("2026-11-13")).toBe("2026-11-17"); // vendredi -> mardi suivant
+    expect(jourDeRelance("2026-11-11")).toBe("2026-11-12"); // férié -> jeudi
+  });
+
+  it("une relance prévue un lundi n'est due que le mardi", () => {
+    const envoye = { statut: "envoyee" as const, prochaine_relance: "2026-11-09" };
+    expect(relanceDue(envoye, "2026-11-09")).toBe(false);
+    expect(relanceDue(envoye, "2026-11-10")).toBe(true);
   });
 });

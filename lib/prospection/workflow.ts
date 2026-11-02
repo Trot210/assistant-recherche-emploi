@@ -2,8 +2,9 @@ import type { Prospection } from "@/types/prospection";
 import type { ProspectionStatut } from "@/types/database.types";
 
 // Délais (en jours) avant chaque relance : 7 jours après le premier
-// message, puis 14 jours après la première relance. Au-delà de deux
-// relances, on arrête — insister davantage dessert la candidature.
+// message, puis 14 jours après la première relance (soit environ trois semaines
+// après le premier message). Au-delà de deux relances, on arrête — insister
+// davantage dessert la candidature.
 export const DELAIS_RELANCE_JOURS = [7, 14] as const;
 export const MAX_RELANCES = DELAIS_RELANCE_JOURS.length;
 
@@ -28,11 +29,31 @@ export function calculerProchaineRelance(dateEnvoi: string, nbRelancesEnvoyees: 
   return delai === undefined ? null : ajouterJours(dateEnvoi, delai);
 }
 
+// Jours fériés à date fixe (mois-jour) : on n'envoie pas de relance ces jours-là.
+const FERIES_FIXES = new Set(["01-01", "05-01", "05-08", "07-14", "08-15", "11-01", "11-11", "12-25"]);
+
+// Une relance part de préférence un mardi, un mercredi ou un jeudi : les jours où un
+// mail professionnel est le plus lu (le lundi, la boîte déborde ; le vendredi, on
+// bascule sur le week-end).
+export function estJourDeRelance(date: string): boolean {
+  const jour = new Date(`${date}T12:00:00Z`).getUTCDay();
+  return jour >= 2 && jour <= 4 && !FERIES_FIXES.has(date.slice(5));
+}
+
+// Jour où la relance est réellement due : la date prévue, reportée au prochain jour
+// de relance. Appliqué à la lecture, pour tous les messages (anciens compris), sans
+// modifier la date enregistrée.
+export function jourDeRelance(datePrevue: string): string {
+  let jour = datePrevue;
+  for (let i = 0; i < 8 && !estJourDeRelance(jour); i++) jour = ajouterJours(jour, 1);
+  return jour;
+}
+
 export function relanceDue(prospection: Pick<Prospection, "statut" | "prochaine_relance">, aujourdhui: string): boolean {
   return (
     prospection.statut === "envoyee" &&
     prospection.prochaine_relance !== null &&
-    prospection.prochaine_relance <= aujourdhui
+    jourDeRelance(prospection.prochaine_relance) <= aujourdhui
   );
 }
 

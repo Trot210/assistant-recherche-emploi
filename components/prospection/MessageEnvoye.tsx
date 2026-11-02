@@ -5,7 +5,7 @@ import { libelleLangue } from "@/lib/prospection/langue";
 import { formaterDateFr } from "@/lib/prospection/dates";
 import { definitionSuivi, idSuivi, STATUTS_SUIVI, type IdSuivi } from "@/lib/prospection/suivi";
 import { texteSuppressionMessage } from "@/lib/prospection/suppression";
-import { aujourdhuiParis } from "@/lib/prospection/workflow";
+import { aujourdhuiParis, jourDeRelance } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import Confirmation from "./Confirmation";
@@ -114,7 +114,7 @@ export default function MessageEnvoye({
           <div className="prospection-meta">
             Envoyé le {formaterDateFr(prospection.date_envoi)} · {prospection.poste_vise} · {libelleLangue(prospection.langue)}
             {prospection.statut === "envoyee" && prospection.prochaine_relance &&
-              ` · relance prévue le ${formaterDateFr(prospection.prochaine_relance)}`}
+              ` · relance prévue le ${formaterDateFr(jourDeRelance(prospection.prochaine_relance))}`}
             {prospection.prochaine_action &&
               ` · À faire : ${prospection.prochaine_action}${prospection.prochaine_action_date ? ` (${formaterDateFr(prospection.prochaine_action_date)})` : ""}`}
           </div>

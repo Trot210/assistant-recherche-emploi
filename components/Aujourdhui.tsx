@@ -5,7 +5,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { formaterDateFr } from "@/lib/prospection/dates";
 import { offrePertinente } from "@/lib/prospection/offres";
-import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
+import { aujourdhuiParis, estEnCours, jourDeRelance, relanceDue } from "@/lib/prospection/workflow";
 import { calculerPriorite, resumerPriorite } from "@/lib/prospection/priorite";
 import { envoiASurveiller } from "@/lib/prospection/envois-alertes";
 import { formaterProgrammation } from "@/lib/prospection/planification";
@@ -158,7 +158,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
                 </div>
                 <div className="prospection-meta">
                   Envoyé le {p.date_envoi ? formaterDateFr(p.date_envoi) : "?"} · prévue le{" "}
-                  {p.prochaine_relance ? formaterDateFr(p.prochaine_relance) : "?"}
+                  {p.prochaine_relance ? formaterDateFr(jourDeRelance(p.prochaine_relance)) : "?"}
                 </div>
               </div>
             ))}

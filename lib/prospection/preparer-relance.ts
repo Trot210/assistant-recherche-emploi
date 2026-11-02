@@ -35,12 +35,14 @@ export async function preparerRelance(
     return { erreur: `Déjà ${MAX_RELANCES} relances envoyées`, statut: 409 };
   }
 
-  const { data: enCours } = await supabase
+  const { data: filExistant } = await supabase
     .from("prospections")
-    .select("id, statut")
+    .select()
     .eq("parent_id", initial.id)
-    .eq("user_id", userId);
-  if ((enCours ?? []).some((r) => estEnCours(r.statut))) {
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  const enCours = filExistant ?? [];
+  if (enCours.some((r) => estEnCours(r.statut))) {
     return { erreur: "Une relance est déjà en préparation pour ce message", statut: 409 };
   }
 
@@ -56,7 +58,14 @@ export async function preparerRelance(
   const interdit = [blocageContact(contact), blocageEntreprise(entreprise)].find((b) => b?.niveau === "interdit");
   if (interdit) return { erreur: interdit.raison, statut: 409, code: "bloque" };
 
-  const genere = await genererRelance({ profil, entreprise, contact, initial, numero: initial.nb_relances + 1 });
+  const genere = await genererRelance({
+    profil,
+    entreprise,
+    contact,
+    initial,
+    numero: initial.nb_relances + 1,
+    relancesEnvoyees: enCours.filter((r) => r.date_envoi !== null),
+  });
 
   const { data: prospection, error: insertError } = await supabase
     .from("prospections")

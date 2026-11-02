@@ -4,6 +4,7 @@ import { anthropic } from "@/lib/anthropic/client";
 import { nettoyerMarkdown, tronquer, verifierFidelite } from "@/lib/anthropic/documents";
 import { assemblerMessage, offrePourProspection, sourceAdresse } from "@/lib/prospection/message";
 import { resumerFiche } from "@/lib/prospection/fiche";
+import { consigneRelance, messagesPrecedents } from "@/lib/prospection/relance";
 import { aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import type { Profil } from "@/types/profil";
@@ -141,24 +142,27 @@ export async function genererRelance(params: {
   contact: ContactEntreprise | null;
   initial: Prospection;
   numero: number;
+  // Relances déjà envoyées dans ce fil (la plus ancienne d'abord), pour ne pas se répéter.
+  relancesEnvoyees?: Prospection[];
 }): Promise<MessageGenere> {
-  const { profil, entreprise, contact, initial, numero } = params;
+  const { profil, entreprise, contact, initial, numero, relancesEnvoyees = [] } = params;
   const langue = initial.langue;
 
   const genere = await rediger(
-    `Tu rédiges la relance n°${numero} d'un e-mail de candidature spontanée resté sans réponse.
+    `${consigneRelance(numero, MAX_CORPS_RELANCE)}
 
-${reglesCommunes(langue)}
-
-Une relance respecte le temps du destinataire : deux ou trois phrases (${MAX_CORPS_RELANCE} caractères maximum). Rappelle en une phrase le poste visé et le message précédent (envoyé le ${initial.date_envoi ?? "récemment"}), sans en répéter le contenu et sans reprocher l'absence de réponse. Tu peux apporter UN élément nouveau, mais seulement s'il existe dans le profil ou la fiche et n'a pas déjà été mentionné. Termine par une question simple, facile à traiter.`,
+${reglesCommunes(langue)}`,
     `${profilPourPrompt(profil)}
 
 ${entreprisePourPrompt(entreprise, contact)}
 
 Poste visé : ${initial.poste_vise}
 
-Message précédent (à ne pas recopier) :
-${initial.corps}`,
+Messages déjà envoyés dans ce fil (à ne pas recopier) :
+${messagesPrecedents(
+  { date: initial.date_envoi, corps: initial.corps },
+  relancesEnvoyees.map((r) => ({ date: r.date_envoi, corps: r.corps })),
+)}`,
   );
 
   const corps = tronquer(nettoyerMarkdown(genere.corps), MAX_CORPS_RELANCE);
