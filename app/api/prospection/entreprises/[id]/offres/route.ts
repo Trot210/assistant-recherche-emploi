@@ -47,7 +47,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     // La marque ne contient que des lettres et des chiffres : rien à échapper dans le motif.
     const { data: offresBase } = await supabase
       .from("offres")
-      .select("id, titre, entreprise, localisation, date_publication, lien_original, created_at")
+      .select("id, titre, entreprise, description, localisation, date_publication, lien_original, created_at")
       .eq("user_id", user.id)
       .ilike("entreprise", `%${marque}%`)
       .order("created_at", { ascending: false })
@@ -63,6 +63,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           lien: o.lien_original || null,
           source: "base",
           offreId: o.id,
+          description: o.description,
         });
       }
     }
@@ -82,6 +83,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
           lien: o.origineOffre?.urlOrigine || lienOffreFranceTravail(o.id),
           source: "france_travail",
           offreId: null,
+          description: o.description ?? null,
         });
       }
     } catch (e) {

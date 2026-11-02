@@ -95,6 +95,12 @@ export default function Dashboard() {
   const [erreur, setErreur] = useState<string | null>(null);
   const [avertissements, setAvertissements] = useState<string[]>([]);
 
+  // Lien direct vers une offre (?offre=<id>), par exemple depuis le conseil sur une réponse.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("offre");
+    if (id && /^[0-9a-f-]{36}$/i.test(id)) setOffreSelectionneeId(id);
+  }, []);
+
   // Débounce de la recherche texte : évite une requête à chaque frappe.
   useEffect(() => {
     const t = setTimeout(() => setRecherche(rechercheInput), DEBOUNCE_RECHERCHE_MS);

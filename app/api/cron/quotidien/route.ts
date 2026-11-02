@@ -2,16 +2,16 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { lireBilanUsage, ouvrirUsage, plafondAtteint } from "@/lib/anthropic/usage";
+import { lireBilanUsage, ouvrirUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { hunterConfigure, lireQuotaHunter } from "@/lib/hunter/client";
-import { imapConfigure, lireReponsesCandidates } from "@/lib/mail/imap";
+import { imapConfigure } from "@/lib/mail/imap";
+import { detecterReponses } from "@/lib/prospection/detecter-reponses";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { offrePertinente } from "@/lib/prospection/offres";
 import { preparerRelance } from "@/lib/prospection/preparer-relance";
 import { calculerPriorite } from "@/lib/prospection/priorite";
 import { MAX_RELANCES_PAR_JOUR, relancesAPreparer } from "@/lib/prospection/quotidien";
 import { construireRecap, type DonneesRecap } from "@/lib/prospection/recap";
-import { critereRecherche, estExpediteurAutomatique, rapprocher, type CritereRecherche, type EnvoiConnu } from "@/lib/prospection/reponses";
 import { decomposerParis, parisVersUtc } from "@/lib/prospection/planification";
 import { aujourdhuiParis, estEnCours, relanceDue } from "@/lib/prospection/workflow";
 import type { Database } from "@/types/database.types";
@@ -21,6 +21,8 @@ import type { Database } from "@/types/database.types";
 export const maxDuration = 60;
 
 const JOURS_LECTURE_REPONSES = 120;
+// Réponses classées par Claude chaque matin (environ 1 centime chacune).
+const MAX_CLASSEMENTS_MATIN = 4;
 // La lecture de la boîte mail ne doit jamais retarder le récapitulatif ni dépasser la durée
 // maximale de la route : passé ce délai, on la déclare indisponible ce matin.
 const DELAI_LECTURE_MS = 25_000;
@@ -48,42 +50,18 @@ async function resoudreAppelant(request: Request) {
   return { supabase: supabase as SupabaseClient<Database>, userId: user.id } as const;
 }
 
-// Nombre de messages reçus d'entreprises à qui l'utilisateur a écrit et qu'il n'a
-// pas encore traités. Lecture seule, aucun appel à Claude.
+// Nouvelles réponses d'entreprises à qui l'utilisateur a écrit et qu'il n'a pas encore
+// traitées. Lecture seule de la boîte mail ; les nouvelles réponses sont classées (au
+// plus MAX_CLASSEMENTS_MATIN, pour borner le coût) et mémorisées, prêtes à valider dans
+// « Aujourd'hui ». Rien n'est enregistré sur une candidature sans l'accord de l'utilisateur.
 async function compterNouvellesReponses(supabase: SupabaseClient<Database>, userId: string): Promise<number> {
-  const [{ data: envoyes }, { data: contacts }, { data: traitees }] = await Promise.all([
-    supabase.from("prospections").select("id, parent_id, smtp_message_id, date_envoi, contact_id").eq("user_id", userId).not("date_envoi", "is", null),
-    supabase.from("contacts").select("id, email").eq("user_id", userId),
-    supabase.from("reponses_traitees").select("message_id").eq("user_id", userId),
-  ]);
-
-  const emailContact = new Map((contacts ?? []).map((c) => [c.id, c.email]));
-  const envois: EnvoiConnu[] = (envoyes ?? []).map((p) => ({
-    id: p.id,
-    parentId: p.parent_id,
-    smtpMessageId: p.smtp_message_id,
-    emailContact: p.contact_id ? (emailContact.get(p.contact_id) ?? null) : null,
-    dateEnvoi: p.date_envoi as string,
-  }));
-  if (envois.length === 0) return 0;
-
-  const criteres = new Map<string, CritereRecherche>();
-  for (const e of envois) {
-    const c = e.emailContact ? critereRecherche(e.emailContact) : null;
-    if (c) criteres.set(`${c.type}:${c.valeur}`, c);
-  }
-  if (criteres.size === 0) return 0;
-
-  const premier = envois.reduce((min, e) => (e.dateEnvoi < min ? e.dateEnvoi : min), envois[0].dateEnvoi);
-  const depuis = new Date(Math.max(Date.now() - JOURS_LECTURE_REPONSES * 86_400_000, new Date(`${premier}T00:00:00Z`).getTime() - 86_400_000));
-
-  const lues = await lireReponsesCandidates({
-    criteres: [...criteres.values()],
-    depuis,
-    adresseUtilisateur: process.env.IMAP_USER ?? process.env.SMTP_USER ?? "",
+  const bilan = await lireBilanUsage(supabase, userId).catch(() => null);
+  const detection = await detecterReponses(supabase, userId, {
+    jours: JOURS_LECTURE_REPONSES,
+    maxClassements: MAX_CLASSEMENTS_MATIN,
+    claudeDisponible: bilan ? !plafondAtteint(bilan) : true,
   });
-  const dejaVus = new Set((traitees ?? []).map((t) => t.message_id));
-  return lues.filter((r) => !dejaVus.has(r.messageId) && !estExpediteurAutomatique(r.fromEmail) && rapprocher(r, envois) !== null).length;
+  return detection.propositions.filter((p) => p.classement.type !== "automatique").length;
 }
 
 export async function POST(request: Request) {
@@ -122,6 +100,8 @@ export async function POST(request: Request) {
   const relancesPreparees: DonneesRecap["relancesPreparees"] = [];
   const raisonsEchec = new Map<string, string>();
 
+  // Le coût du classement des réponses est compté à part des relances.
+  suivreUsage(supabase, userId, "classement-reponses");
   // null : lecture impossible ou trop lente ce matin (indiqué dans le récapitulatif).
   const lecture: Promise<number | null> = imapConfigure()
     ? avecDelai(

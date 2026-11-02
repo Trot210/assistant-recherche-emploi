@@ -59,6 +59,8 @@ export interface OffreTrouvee {
   source: "base" | "france_travail";
   // Présent quand l'offre est déjà dans la base de l'application.
   offreId: string | null;
+  // Texte de l'annonce quand la source le fournit (nécessaire pour adapter CV et lettre).
+  description?: string | null;
 }
 
 export function dedoublonnerOffres(offres: OffreTrouvee[]): OffreTrouvee[] {

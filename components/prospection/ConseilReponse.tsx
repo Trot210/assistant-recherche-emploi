@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formaterDateFr } from "@/lib/prospection/dates";
+import PostulerOffre from "./PostulerOffre";
 import {
   LIBELLE_CATEGORIE,
   LIBELLE_RECOMMANDATION,
@@ -11,6 +12,8 @@ import {
 
 interface Props {
   prospectionId: string;
+  entrepriseId: string;
+  posteVise: string;
   nomEntreprise: string;
   // Note la reprise de contact comme prochaine action de la candidature (choix de l'utilisateur).
   onNoterAction: (action: string, date: string | null) => Promise<boolean>;
@@ -27,7 +30,7 @@ const TON_RECOMMANDATION: Record<Conseil["recommandation"], string> = {
 // Analyse d'une réponse déjà enregistrée : ce qu'elle dit, faut-il répondre, et un
 // exemple de réponse quand c'est pertinent. Rien n'est envoyé d'ici : le message
 // se copie ou s'ouvre dans la messagerie de l'utilisateur, qui l'envoie lui-même.
-export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAction }: Props) {
+export default function ConseilReponse({ prospectionId, entrepriseId, posteVise, nomEntreprise, onNoterAction }: Props) {
   const [conseil, setConseil] = useState<Conseil | null>(null);
   const [analyseLe, setAnalyseLe] = useState<string | null>(null);
   const [avis, setAvis] = useState<string | null>(null);
@@ -203,6 +206,17 @@ export default function ConseilReponse({ prospectionId, nomEntreprise, onNoterAc
               </div>
             </div>
           )}
+
+          {conseil.recommandation !== "attendre" &&
+            !conseil.ne_plus_contacter &&
+            (["redirection", "cv_non_conserve", "pas_de_besoin", "plus_tard"].includes(conseil.categorie) || conseil.recommandation === "agir_d_abord") && (
+              <PostulerOffre
+                prospectionId={prospectionId}
+                entrepriseId={entrepriseId}
+                posteVise={posteVise}
+                liensReponse={conseil.liens ?? []}
+              />
+            )}
 
           {conseil.brouillon ? (
             <div>

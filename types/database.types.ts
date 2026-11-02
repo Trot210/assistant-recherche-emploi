@@ -499,6 +499,26 @@ export interface Database {
           },
         ];
       };
+      reponses_detectees: {
+        Row: {
+          id: string;
+          user_id: string;
+          message_id: string;
+          prospection_id: string | null;
+          proposition: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          message_id: string;
+          prospection_id?: string | null;
+          proposition: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reponses_detectees"]["Insert"]>;
+        Relationships: [];
+      };
       reponses_envoyees: {
         Row: {
           id: string;

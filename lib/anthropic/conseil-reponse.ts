@@ -5,6 +5,7 @@ import { nettoyerMarkdown, tronquer, verifierFidelite } from "@/lib/anthropic/do
 import { profilPourPrompt } from "@/lib/anthropic/prospection";
 import { CATEGORIES, RECOMMANDATIONS, appliquerRegles, dateRelance, objetReponse, type ConseilReponse } from "@/lib/prospection/conseil-reponse";
 import { resumerFiche } from "@/lib/prospection/fiche";
+import { extraireUrls } from "@/lib/prospection/reponses";
 import { offrePourProspection } from "@/lib/prospection/message";
 import { aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Profil } from "@/types/profil";
@@ -40,6 +41,9 @@ const AnalyseSchema = z.object({
   ne_plus_contacter: z
     .boolean()
     .describe("true seulement si la personne demande explicitement à ne plus être contactée ou à ce que ses coordonnées soient supprimées"),
+  urls_utiles: z
+    .array(z.string())
+    .describe("Liens écrits dans le message qui servent à candidater (site carrières, offre précise) ; vide s'il n'y en a pas"),
   corps_reponse: z
     .string()
     .nullable()
@@ -54,6 +58,8 @@ export interface ReponseRecue {
   sujet: string;
   // Texte déjà nettoyé de la citation du message d'origine.
   texte: string;
+  // Texte complet du message, pour vérifier que les liens proposés y figurent.
+  texteComplet?: string;
   date: string;
 }
 
@@ -197,6 +203,11 @@ ${neutraliser(tronquer(reponse.texte, MAX_TEXTE_RECU)) || "(message vide)"}
     recommandation: analyse.recommandation,
     justification: analyse.justification.trim().slice(0, 340),
     action_suggeree: analyse.action_suggeree?.trim() || null,
+    liens: (() => {
+      // Un lien que le modèle proposerait sans qu'il figure dans le message est écarté.
+      const presentes = new Set(extraireUrls(reponse.texteComplet ?? reponse.texte, 50));
+      return analyse.urls_utiles.filter((u) => presentes.has(u)).slice(0, 3);
+    })(),
     relance_date: dateRelance(aujourdhui, analyse.delai_relance_jours),
     ne_plus_contacter: analyse.ne_plus_contacter,
     brouillon,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formaterDateFr } from "@/lib/prospection/dates";
 import { politiqueProposee } from "@/lib/prospection/politique";
 import { definitionSuivi, TYPES_REPONSE } from "@/lib/prospection/suivi";
@@ -52,11 +52,34 @@ const LIBELLE_CONFIANCE: Record<Proposition["confiance"], string> = {
 // l'utilisateur ne l'associe lui-même à la candidature.
 export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
   const [enCours, setEnCours] = useState(false);
+  // Réponses déjà détectées et mémorisées : affichées à l'ouverture, sans relire la boîte mail.
+  const [depuisMemoire, setDepuisMemoire] = useState(false);
   const [resultat, setResultat] = useState<Resultat | null>(null);
   const [erreur, setErreur] = useState<string | null>(null);
   const [types, setTypes] = useState<Record<string, ReponseType>>({});
   const [choix, setChoix] = useState<Record<string, Partial<Choix>>>({});
   const [traitement, setTraitement] = useState<Record<string, { enCours: boolean; erreur: string | null }>>({});
+
+  useEffect(() => {
+    let actif = true;
+    fetch("/api/prospection/reponses/detectees")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const trouvees = (data?.propositions ?? []) as Proposition[];
+        if (!actif || trouvees.length === 0) return;
+        setResultat({ propositions: trouvees, messagesLus: 0, dejaTraites: 0, sansCandidature: 0 });
+        setTypes(
+          Object.fromEntries(
+            trouvees.filter((p) => p.classement.type !== "automatique").map((p) => [p.message_id, p.classement.type as ReponseType]),
+          ),
+        );
+        setDepuisMemoire(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      actif = false;
+    };
+  }, []);
 
   async function rechercher() {
     setEnCours(true);
@@ -70,6 +93,7 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error ?? "Erreur lors de la recherche");
       const trouve = data as Resultat;
+      setDepuisMemoire(false);
       setResultat(trouve);
       setTypes(
         Object.fromEntries(
@@ -159,8 +183,9 @@ export default function ReponsesPanel({ onAssociee, onFilModifie }: Props) {
         </button>
         {resultat && !enCours && (
           <span className="prospection-meta">
-            {resultat.messagesLus} message(s) lu(s) · {resultat.propositions.length} à examiner · {resultat.dejaTraites} déjà
-            traité(s)
+            {depuisMemoire
+              ? `${resultat.propositions.length} réponse(s) détectée(s), en attente de ton accord`
+              : `${resultat.messagesLus} message(s) lu(s) · ${resultat.propositions.length} à examiner · ${resultat.dejaTraites} déjà traité(s)`}
           </span>
         )}
       </div>

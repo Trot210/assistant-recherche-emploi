@@ -89,6 +89,7 @@ export async function analyserReponse(
           expediteurEmail: choisie.fromEmail,
           sujet: choisie.sujet,
           texte: texteDeLaReponse(choisie.texte),
+          texteComplet: choisie.texte,
           date: choisie.date.toISOString().slice(0, 10),
         };
       } else {

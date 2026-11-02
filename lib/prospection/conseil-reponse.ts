@@ -78,6 +78,8 @@ export interface ConseilReponse {
   source: "message" | "extrait";
   // Avertissements du contrôle de fidélité sur le brouillon.
   avertissements: string[];
+  // Liens réellement écrits dans le message (site carrières, offre) : jamais inventés.
+  liens?: string[];
   // Identifiant (brut) du message reçu : la réponse envoyée s'y rattache dans le fil.
   reponse_message_id?: string | null;
 }

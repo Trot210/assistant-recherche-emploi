@@ -221,6 +221,8 @@ export default function MessageEnvoye({
           {aReponse && prospection.reponse_type !== "non_distribue" && (
             <ConseilReponse
               prospectionId={prospection.id}
+              entrepriseId={prospection.entreprise_id}
+              posteVise={prospection.poste_vise}
               nomEntreprise={entreprise?.nom ?? "Entreprise"}
               onNoterAction={async (texte, date) => {
                 const ok = await enregistrer({ prochaine_action: texte, prochaine_action_date: date });
