@@ -3,6 +3,8 @@ import type { Fiche } from "@/types/fiche";
 // Types générés manuellement à partir des migrations SQL (supabase/migrations).
 // A régénérer avec `supabase gen types typescript` une fois le projet Supabase lié.
 
+export type Json = string | number | boolean | null | { [cle: string]: Json | undefined } | Json[];
+
 export type CandidatureStatut =
   | "a_traiter"
   | "envoyee"
@@ -490,6 +492,36 @@ export interface Database {
         Relationships: [
           {
             foreignKeyName: "envois_programmes_prospection_id_fkey";
+            columns: ["prospection_id"];
+            isOneToOne: false;
+            referencedRelation: "prospections";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      conseils_reponses: {
+        Row: {
+          id: string;
+          user_id: string;
+          prospection_id: string;
+          message_id: string | null;
+          reponse_date: string | null;
+          contenu: Json;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          prospection_id: string;
+          message_id?: string | null;
+          reponse_date?: string | null;
+          contenu: Json;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["conseils_reponses"]["Insert"]>;
+        Relationships: [
+          {
+            foreignKeyName: "conseils_reponses_prospection_id_fkey";
             columns: ["prospection_id"];
             isOneToOne: false;
             referencedRelation: "prospections";

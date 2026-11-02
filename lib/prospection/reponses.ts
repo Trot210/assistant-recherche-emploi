@@ -144,6 +144,21 @@ export function nettoyerCorps(texte: string, max = 600): string {
   return propre.length > max ? `${propre.slice(0, max - 1).trimEnd()}…` : propre;
 }
 
+// Ce que la personne a écrit, signature comprise, pour l'analyser en entier : on
+// coupe seulement à la citation du message d'origine, on garde les retours à la
+// ligne (le nom et la fonction se lisent dans la signature) et on borne la longueur.
+export function texteDeLaReponse(texte: string, max = 4000): string {
+  const lignes = texte.replace(/\r\n?/g, "\n").split("\n");
+  const gardees: string[] = [];
+  for (const ligne of lignes) {
+    const nue = ligne.trim();
+    if (DEBUT_CITATION.some((motif) => motif.test(nue)) && !/^--\s*$/.test(nue)) break;
+    gardees.push(ligne.trimEnd());
+  }
+  const propre = gardees.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return propre.length > max ? `${propre.slice(0, max - 1).trimEnd()}…` : propre;
+}
+
 // Seuls les liens réellement écrits dans le message : c'est la liste de
 // référence pour écarter tout lien que le modèle aurait « inventé ».
 export function extraireUrls(texte: string, max = 5): string[] {

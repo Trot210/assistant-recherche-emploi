@@ -7,6 +7,7 @@ import {
   nettoyerCorps,
   normaliserIdMessage,
   rapprocher,
+  texteDeLaReponse,
   type EnvoiConnu,
   type ReponseBrute,
 } from "@/lib/prospection/reponses";
@@ -102,6 +103,26 @@ describe("nettoyerCorps", () => {
     expect(propre.length).toBeLessThanOrEqual(100);
     expect(propre.endsWith("…")).toBe(true);
     expect(propre).not.toContain("\n");
+  });
+});
+
+describe("texteDeLaReponse", () => {
+  it("garde la signature et les retours à la ligne, et coupe à la citation", () => {
+    const texte =
+      "Bonjour,\nNous ne conservons pas les CV.\n\nBien cordialement,\nPrénom Nom\nResponsable RH\n\nLe jeu. 30 oct. 2026 à 09:00, Candidat <candidat@exemple.fr> a écrit :\n> Bonjour";
+    expect(texteDeLaReponse(texte)).toBe(
+      "Bonjour,\nNous ne conservons pas les CV.\n\nBien cordialement,\nPrénom Nom\nResponsable RH",
+    );
+  });
+
+  it("ne s'arrête pas au séparateur de signature", () => {
+    expect(texteDeLaReponse("Merci.\n-- \nPrénom Nom\nDirectrice")).toBe("Merci.\n--\nPrénom Nom\nDirectrice");
+  });
+
+  it("borne la longueur", () => {
+    const propre = texteDeLaReponse("mot ".repeat(400), 100);
+    expect(propre.length).toBeLessThanOrEqual(100);
+    expect(propre.endsWith("…")).toBe(true);
   });
 });
 

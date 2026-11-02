@@ -9,6 +9,7 @@ import { aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospection";
 import Confirmation from "./Confirmation";
+import ConseilReponse from "./ConseilReponse";
 import type { CvInfo } from "./MessageCard";
 
 interface Props {
@@ -215,6 +216,18 @@ export default function MessageEnvoye({
                 </p>
               )}
             </div>
+          )}
+
+          {aReponse && prospection.reponse_type !== "non_distribue" && (
+            <ConseilReponse
+              prospectionId={prospection.id}
+              nomEntreprise={entreprise?.nom ?? "Entreprise"}
+              onNoterAction={async (texte, date) => {
+                const ok = await enregistrer({ prochaine_action: texte, prochaine_action_date: date });
+                if (ok) setAction(texte);
+                return ok;
+              }}
+            />
           )}
 
           <div className="prospection-grille">

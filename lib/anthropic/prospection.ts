@@ -28,7 +28,7 @@ const MessageSchema = z.object({
     .describe("Cœur du message uniquement : sans formule d'appel, sans formule de politesse finale, sans signature"),
 });
 
-function profilPourPrompt(profil: Profil): string {
+export function profilPourPrompt(profil: Profil): string {
   return `Date du jour : ${aujourdhuiParis()}.
 
 Profil du candidat (SOURCE UNIQUE ET OFFICIELLE sur le candidat — n'utilise aucune autre information) :
