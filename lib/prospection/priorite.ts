@@ -1,4 +1,5 @@
 import type { PolitiqueCandidature } from "@/types/database.types";
+import { pertinenceContact } from "@/lib/prospection/contacts";
 import type { ContactEntreprise, Entreprise } from "@/types/prospection";
 
 // Note de priorité d'une entreprise, de 0 à 100 : où écrire en premier ? Des
@@ -26,8 +27,6 @@ const POINTS_TAILLE: Record<string, number> = {
   "53": 20, "52": 20, "51": 20, "42": 20, "41": 18, "32": 14, "31": 8, "22": 8, "21": 3,
   "12": 3, "11": 3, "03": 3, "02": 3, "01": 3, "00": 3,
 };
-
-const POSTE_UTILE = /category|cat[ée]gor|trade|shopper|marketing|brand|marque|produit|product|ach(at|et)|purchas|buyer|commerc|sales|key account|\bkam\b|business develop/i;
 
 export interface EntreeScore {
   entreprise: Pick<
@@ -98,9 +97,9 @@ export function calculerPriorite({ entreprise, contacts, nbMessages }: EntreeSco
       score += 10;
       raisons.push("adresse vérifiée");
     }
-    if (nominatifs.some((c) => c.poste && POSTE_UTILE.test(c.poste))) {
+    if (nominatifs.some((c) => c.poste && pertinenceContact({ ...c, generique: false }, "").role === "decideur")) {
       score += 8;
-      raisons.push("contact du bon métier");
+      raisons.push("contact décideur du poste");
     }
   } else if (joignables.length > 0) {
     score += 4;

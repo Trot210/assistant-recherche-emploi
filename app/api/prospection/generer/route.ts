@@ -4,6 +4,8 @@ import { genererMessageSpontane } from "@/lib/anthropic/prospection";
 import { preparerRelance } from "@/lib/prospection/preparer-relance";
 import { suggererLangueContact } from "@/lib/prospection/langue";
 import { premierBlocage } from "@/lib/prospection/politique";
+import { avertissementAdresse, avertissementInterlocuteur } from "@/lib/prospection/avertissements-ecriture";
+import { aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Langue } from "@/types/database.types";
 import { ouvrirUsage } from "@/lib/anthropic/usage";
 
@@ -101,8 +103,32 @@ export async function POST(request: Request) {
     if (blocage?.niveau === "interdit") {
       return NextResponse.json({ error: blocage.raison, code: "bloque" }, { status: 409 });
     }
-    if (blocage && body?.forcer !== true) {
-      return NextResponse.json({ error: blocage.raison, code: "politique" }, { status: 409 });
+
+    // Avertissements : la politique de l'entreprise, une adresse non vérifiée, une autre
+    // personne déjà contactée dans la même entreprise. Une seule confirmation les couvre tous.
+    const { data: autresMessages } = await supabase
+      .from("prospections")
+      .select("type, statut, contact_id, date_envoi, reponse_type")
+      .eq("entreprise_id", entreprise.id)
+      .eq("user_id", user.id);
+    const { data: contactsEntreprise } = await supabase
+      .from("contacts")
+      .select("id, nom")
+      .eq("entreprise_id", entreprise.id)
+      .eq("user_id", user.id);
+    const avertissements = [
+      blocage?.raison ?? null,
+      avertissementAdresse(contact),
+      avertissementInterlocuteur({
+        nomEntreprise: entreprise.nom,
+        messages: autresMessages ?? [],
+        contacts: contactsEntreprise ?? [],
+        contactId: contact?.id ?? null,
+        aujourdhui: aujourdhuiParis(),
+      }),
+    ].filter((a): a is string => a !== null);
+    if (avertissements.length > 0 && body?.forcer !== true) {
+      return NextResponse.json({ error: avertissements.join(" "), code: "politique" }, { status: 409 });
     }
 
     const genere = await genererMessageSpontane({

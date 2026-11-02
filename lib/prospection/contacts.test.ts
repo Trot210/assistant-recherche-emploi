@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { choisirMeilleurContact } from "@/lib/prospection/contacts";
+import { choisirMeilleurContact, pertinenceContact } from "@/lib/prospection/contacts";
 import type { ContactEntreprise } from "@/types/prospection";
 
 function contact(surcharge: Partial<ContactEntreprise>): ContactEntreprise {
@@ -66,5 +66,40 @@ describe("choisirMeilleurContact", () => {
     const verifiee = contact({ id: "v", poste: "Head of Trade Marketing", email_verification: "valide" });
     const autre = contact({ id: "a", poste: "Head of Trade Marketing" });
     expect(choisirMeilleurContact([autre, verifiee], "Trade Marketing")?.id).toBe("v");
+  });
+});
+
+describe("pertinenceContact", () => {
+  const role = (poste: string | null, generique = false) => pertinenceContact(contact({ poste, generique }), "Category Manager").role;
+
+  it("reconnaît le décideur, le recruteur et la fonction RH", () => {
+    expect(role("Marketing Director")).toBe("decideur");
+    expect(role("Regional Sales Director")).toBe("decideur");
+    expect(role("Head of Category")).toBe("decideur");
+    expect(role("Talent Acquisition Specialist")).toBe("recruteur");
+    expect(role("Chargée de recrutement")).toBe("recruteur");
+    expect(role("Head of HR")).toBe("rh");
+    expect(role("Human Resources Director")).toBe("rh");
+    expect(role("Administration Manager France")).toBe("autre");
+    expect(role(null)).toBe("autre");
+  });
+
+  it("classe le décideur avant le recruteur, et les directions RH en dernier", () => {
+    const score = (poste: string) => pertinenceContact(contact({ poste }), "Category Manager").score;
+    expect(score("Marketing Director")).toBeGreaterThan(score("Talent Acquisition Specialist"));
+    expect(score("Talent Acquisition Specialist")).toBeGreaterThan(score("HR Director"));
+    expect(score("Talent Acquisition Specialist")).toBeGreaterThan(score("Administration Manager"));
+    expect(score("Administration Manager")).toBeGreaterThan(score("Chief Human Resources Officer"));
+  });
+
+  it("un poste junior passe après un poste senior du même métier", () => {
+    const score = (poste: string) => pertinenceContact(contact({ poste }), "Trade Marketing").score;
+    expect(score("Marketing Manager")).toBeGreaterThan(score("Marketing Assistant"));
+  });
+
+  it("choisit le décideur de marketing plutôt que le directeur RH, même pour un poste de category", () => {
+    const rh = contact({ id: "rh", poste: "Human Resources Director" });
+    const marketing = contact({ id: "mk", poste: "Marketing Director" });
+    expect(choisirMeilleurContact([rh, marketing], "Category Manager")?.id).toBe("mk");
   });
 });

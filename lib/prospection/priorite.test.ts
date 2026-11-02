@@ -28,7 +28,7 @@ describe("calculerPriorite", () => {
     // 25 secteur + 20 taille + 15 proximité + 12 + 10 + 8 contact
     expect(p.score).toBe(90);
     expect(p.raisons).toEqual(
-      expect.arrayContaining(["secteur cible", "grande structure", "contact nominatif", "adresse vérifiée", "contact du bon métier"]),
+      expect.arrayContaining(["secteur cible", "grande structure", "contact nominatif", "adresse vérifiée", "contact décideur du poste"]),
     );
     expect(p.freins).toEqual([]);
   });

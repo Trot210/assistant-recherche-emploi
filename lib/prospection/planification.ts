@@ -150,11 +150,22 @@ export interface CreneauEtale {
   instant: Date;
 }
 
-const DEBUT_FENETRE_MIN = 9 * 60;
-const FIN_FENETRE_MIN = 17 * 60;
+// Deux façons d'étaler : « recommande » (mardi à jeudi, le matin : les jours et les
+// heures où un mail professionnel a le plus de chances d'être lu) et « ouvres » (tous
+// les jours ouvrés de 9 h à 17 h).
+export type ModeEtalement = "recommande" | "ouvres";
 
-// Répartit `nombre` envois sur des jours ouvrés à partir de `debut` : au plus
-// `maxParJour` par jour, dans la fenêtre 9 h–17 h, à des heures variées (le jour est
+const FENETRES: Record<ModeEtalement, { jours: number[]; debutMin: number; finMin: number }> = {
+  recommande: { jours: [2, 3, 4], debutMin: 9 * 60, finMin: 11 * 60 + 30 },
+  ouvres: { jours: [1, 2, 3, 4, 5], debutMin: 9 * 60, finMin: 17 * 60 },
+};
+
+export function estModeEtalement(valeur: unknown): valeur is ModeEtalement {
+  return valeur === "recommande" || valeur === "ouvres";
+}
+
+// Répartit `nombre` envois à partir de `debut` : au plus `maxParJour` par jour, dans
+// les jours et la fenêtre horaire du mode choisi, à des heures variées (le jour est
 // découpé en autant de plages égales qu'il y a d'envois, un horaire au hasard dans
 // chacune). `occupes` : horaires déjà pris, à éviter à `ecartMinutes` près.
 export function etalerEnvois(params: {
@@ -164,7 +175,9 @@ export function etalerEnvois(params: {
   ecartMinutes: number;
   occupes?: Date[];
   hasard?: () => number;
+  mode?: ModeEtalement;
 }): CreneauEtale[] {
+  const { jours, debutMin: DEBUT_FENETRE_MIN, finMin: FIN_FENETRE_MIN } = FENETRES[params.mode ?? "ouvres"];
   const hasard = params.hasard ?? Math.random;
   const occupes = [...(params.occupes ?? [])];
   const creneaux: CreneauEtale[] = [];
@@ -175,7 +188,7 @@ export function etalerEnvois(params: {
   while (creneaux.length < params.nombre && garde++ < 400) {
     const instantMidi = parisVersUtc(jour, "12:00");
     const { jourSemaine } = decomposerParis(instantMidi);
-    if (jourSemaine !== 0 && jourSemaine !== 6) {
+    if (jours.includes(jourSemaine)) {
       const k = Math.min(params.maxParJour, params.nombre - creneaux.length);
       const plage = largeurMin / k;
       for (let i = 0; i < k; i++) {

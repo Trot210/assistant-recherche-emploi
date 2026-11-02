@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { choisirMeilleurContact } from "@/lib/prospection/contacts";
+import { choisirMeilleurContact, pertinenceContact } from "@/lib/prospection/contacts";
 import { libelleLangue, suggererLangueContact } from "@/lib/prospection/langue";
 import { libelleTranche, POSTES_CIBLES } from "@/lib/prospection/secteurs";
 import { libellePolitique, POLITIQUES, estPolitique } from "@/lib/prospection/politique";
@@ -93,6 +93,8 @@ export default function EntrepriseRow({
   const [nouveauContact, setNouveauContact] = useState({ nom: "", poste: "", email: "", source: "" });
   const [poste, setPoste] = useState<string>(entreprise.fiche?.postes_suggeres[0]?.poste ?? POSTES_CIBLES[0]);
   const [posteLibre, setPosteLibre] = useState("");
+  // Poste visé tel que choisi à l'écran : sert à dire quel contact correspond le mieux.
+  const posteCible = poste === AUTRE ? posteLibre.trim() : poste;
   const [contactId, setContactId] = useState("");
   const [redaction, setRedaction] = useState(false);
   const [suppression, setSuppression] = useState<{ ouverte: boolean; enCours: boolean; erreur: string | null }>({
@@ -686,6 +688,13 @@ export default function EntrepriseRow({
                   {c.email_statut === "invalide" && <span className="prospection-erreur"> [adresse invalide]</span>}
                   {c.email_statut === "ne_plus_contacter" && <span className="prospection-erreur"> [ne plus contacter]</span>}
                   {c.poste && ` — ${c.poste}`}
+                  {c.email && c.poste && (
+                    <span className={pertinenceContact(c, posteCible).role === "decideur" ? "prospection-info" : "prospection-meta"}>
+                      {" "}
+                      [{pertinenceContact(c, posteCible).libelle}
+                      {choisirMeilleurContact(contacts, posteCible)?.id === c.id ? " · recommandé" : ""}]
+                    </span>
+                  )}
                   {c.email ? ` — ${c.email}` : " — pas d'e-mail"}
                   {c.email && (
                     <span className={c.email_verification === "invalide" ? "prospection-erreur" : "prospection-meta"}>
@@ -793,6 +802,7 @@ export default function EntrepriseRow({
                   {contacts.map((c) => (
                     <option key={c.id} value={c.id} disabled={c.email_statut !== "ok"}>
                       {c.nom}
+                      {c.poste ? ` — ${pertinenceContact(c, posteCible).libelle}` : ""}
                       {c.email_statut === "invalide" ? " (adresse invalide)" : c.email_statut === "ne_plus_contacter" ? " (ne plus contacter)" : ""}
                     </option>
                   ))}

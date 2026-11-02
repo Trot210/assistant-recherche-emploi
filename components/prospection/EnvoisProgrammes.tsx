@@ -67,6 +67,7 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [debut, setDebut] = useState("");
   const [maxParJour, setMaxParJour] = useState(3);
+  const [modeEtalement, setModeEtalement] = useState<"recommande" | "ouvres">("recommande");
   const [plan, setPlan] = useState<LignePlan[] | null>(null);
   const [ignores, setIgnores] = useState<{ id: string; raison: string }[]>([]);
 
@@ -115,7 +116,7 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
     try {
       const data = await appeler("/api/prospection/envois-programmes/etaler", {
         method: "POST",
-        body: JSON.stringify({ ids: [...selection], debut: debut || undefined, max_par_jour: maxParJour }),
+        body: JSON.stringify({ ids: [...selection], debut: debut || undefined, max_par_jour: maxParJour, mode_etalement: modeEtalement }),
       });
       setPlan(data.plan as LignePlan[]);
       setIgnores(data.ignores as { id: string; raison: string }[]);
@@ -284,8 +285,8 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
         ) : (
           <>
             <p className="prospection-meta" style={{ marginBottom: 8 }}>
-              Choisis les messages validés à répartir : ils sont proposés en jours ouvrés, entre 9 h et 17 h, à des heures variées. Tu relis le
-              calendrier et tu peux ajuster chaque horaire avant de confirmer.
+              Choisis les messages validés à répartir : ils sont proposés à des heures variées, par défaut du mardi au jeudi le matin (les
+              moments où un mail professionnel est le plus lu). Tu relis le calendrier et tu peux ajuster chaque horaire avant de confirmer.
             </p>
             {programmables.map((p) => {
               const ent = parEntreprise.get(p.entreprise_id);
@@ -321,6 +322,13 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
                       {n}
                     </option>
                   ))}
+                </select>
+              </div>
+              <div className="filter-group">
+                <span className="filter-group-label">Créneaux</span>
+                <select value={modeEtalement} onChange={(ev) => setModeEtalement(ev.target.value as "recommande" | "ouvres")}>
+                  <option value="recommande">Mardi–jeudi, 9 h–11 h 30 (recommandé)</option>
+                  <option value="ouvres">Tous les jours ouvrés, 9 h–17 h</option>
                 </select>
               </div>
               <button className="action-btn primary" onClick={proposerCalendrier} disabled={enCours || selection.size === 0}>

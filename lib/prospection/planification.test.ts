@@ -156,3 +156,37 @@ describe("champ date et heure du navigateur", () => {
     expect(localVersInstant("06/11/2026 09:30")).toBeNull();
   });
 });
+
+describe("etalerEnvois : mode recommandé (mardi à jeudi, le matin)", () => {
+  const hasard = () => 0.5;
+  const c = etalerEnvois({ nombre: 8, debut: "2026-11-02", maxParJour: 3, ecartMinutes: 10, hasard, mode: "recommande" });
+
+  it("ne place aucun envoi un lundi, un vendredi ou un week-end", () => {
+    expect(c).toHaveLength(8);
+    const jours = c.map((x) => decomposerParis(x.instant).jourSemaine);
+    expect(jours.every((j) => [2, 3, 4].includes(j))).toBe(true);
+  });
+
+  it("reste entre 9 h et 11 h 30, à 3 par jour au plus", () => {
+    for (const x of c) {
+      const [h, m] = x.heure.split(":").map(Number);
+      const minutes = h * 60 + m;
+      expect(minutes).toBeGreaterThanOrEqual(9 * 60);
+      expect(minutes).toBeLessThanOrEqual(11 * 60 + 40);
+    }
+    const parJour = new Map<string, number>();
+    for (const x of c) parJour.set(x.jour, (parJour.get(x.jour) ?? 0) + 1);
+    expect(Math.max(...parJour.values())).toBeLessThanOrEqual(3);
+  });
+
+  it("garde l'écart minimal entre deux envois", () => {
+    const instants = c.map((x) => x.instant.getTime()).sort((a, b) => a - b);
+    for (let i = 1; i < instants.length; i++) expect(instants[i] - instants[i - 1]).toBeGreaterThanOrEqual(10 * 60_000);
+  });
+
+  it("le mode « ouvrés » garde tous les jours ouvrés de 9 h à 17 h", () => {
+    const o = etalerEnvois({ nombre: 6, debut: "2026-11-02", maxParJour: 6, ecartMinutes: 10, hasard, mode: "ouvres" });
+    expect(o.some((x) => decomposerParis(x.instant).jourSemaine === 1)).toBe(true);
+    expect(o.some((x) => parseInt(x.heure, 10) >= 12)).toBe(true);
+  });
+});

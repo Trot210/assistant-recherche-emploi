@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   decomposerParis,
+  estModeEtalement,
   etalerEnvois,
   formaterProgrammation,
   parisVersUtc,
@@ -91,6 +92,9 @@ export async function POST(request: Request) {
     debut = decomposerParis(new Date(parisVersUtc(decomposerParis(maintenant).date, "12:00").getTime() + 86_400_000)).date;
   }
 
+  // Par défaut : mardi à jeudi, le matin ; « ouvres » garde tous les jours ouvrés, 9 h–17 h.
+  const mode = estModeEtalement(body?.mode_etalement) ? body.mode_etalement : "recommande";
+
   const maxParJour = Math.min(
     typeof body?.max_par_jour === "number" && body.max_par_jour >= 1 ? Math.floor(body.max_par_jour) : MAX_PAR_JOUR_ETALEMENT,
     reglages.maxParJour,
@@ -132,6 +136,7 @@ export async function POST(request: Request) {
     nombre: retenus.length,
     debut,
     maxParJour,
+    mode,
     ecartMinutes: reglages.ecartMinutes,
     occupes: (occupes ?? []).map((o) => new Date(o.prevu_at)),
   });
@@ -147,5 +152,6 @@ export async function POST(request: Request) {
     })),
     ignores,
     max_par_jour: maxParJour,
+    mode_etalement: mode,
   });
 }
