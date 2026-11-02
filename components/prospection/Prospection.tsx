@@ -20,27 +20,27 @@ import ReponsesPanel from "./ReponsesPanel";
 import CoutClaude from "@/components/CoutClaude";
 import { calculerPriorite, type Priorite } from "@/lib/prospection/priorite";
 
-export type Onglet = "entreprises" | "messages" | "relances" | "programmes" | "bilan";
-type FiltreMessages = "en_cours" | "envoyes" | "tous";
+export type Onglet = "entreprises" | "messages" | "relances" | "bilan";
+export type FiltreMessages = "en_cours" | "programmes" | "envoyes" | "tous";
 type TriEntreprises = "recentes" | "priorite";
 
 interface Props {
   userId: string;
-  gmailActif: boolean;
   hunterActif: boolean;
   smtpActif: boolean;
   imapActif: boolean;
   ongletInitial?: Onglet;
+  filtreInitial?: FiltreMessages;
 }
 
 // Les listes ci-dessous sont chargées en entier : ce volet gère quelques
 // dizaines à quelques centaines d'entreprises ciblées à la main, loin des
 // 1000 lignes que PostgREST renvoie par défaut. Si l'import devait
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
-export default function Prospection({ userId, gmailActif, hunterActif, smtpActif, imapActif, ongletInitial }: Props) {
+export default function Prospection({ userId, hunterActif, smtpActif, imapActif, ongletInitial, filtreInitial }: Props) {
   const supabase = useMemo(() => createClient(), []);
   const [onglet, setOnglet] = useState<Onglet>(ongletInitial ?? "entreprises");
-  const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>("en_cours");
+  const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>(filtreInitial ?? "en_cours");
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
   const [contacts, setContacts] = useState<ContactEntreprise[]>([]);
   const [prospections, setProspections] = useState<ProspectionRow[]>([]);
@@ -84,6 +84,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
   }, [charger, chargerCv]);
 
   const aujourdhui = aujourdhuiParis();
+  const envoisActifs = envois.filter((x) => x.statut === "programme" || x.statut === "en_cours").length;
   // Les entreprises « écartées » (retirées de la liste) restent en base pour
   // garder l'historique de leurs messages, mais n'encombrent plus la liste ni
   // les compteurs.
@@ -195,7 +196,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
       <div className="top-row">
         <div>
           <h1 className="brand-title">
-            <Link href="/" className="brand-link" aria-label="Le Rayon — retour aux offres">
+            <Link href="/aujourdhui" className="brand-link" aria-label="Le Rayon — retour à Aujourd'hui">
               Le Rayon
             </Link>
           </h1>
@@ -205,8 +206,8 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
           <Link href="/aujourdhui" className="action-btn">
             Aujourd&apos;hui
           </Link>
-          <Link href="/" className="action-btn">
-            ← Offres
+          <Link href="/offres" className="action-btn">
+            Offres
           </Link>
         </div>
       </div>
@@ -246,7 +247,6 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             ["entreprises", `Entreprises (${entreprisesActives.length})`],
             ["messages", `Messages (${stats.aTraiter} en cours)`],
             ["relances", `Relances (${stats.relancesDues} dues)`],
-            ["programmes", `Programmés (${envois.filter((x) => x.statut === "programme" || x.statut === "en_cours").length})`],
             ["bilan", "Bilan"],
           ] as [Onglet, string][]
         ).map(([id, libelle]) => (
@@ -332,6 +332,7 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             {(
               [
                 ["en_cours", `À traiter (${messagesEnCours.length})`],
+                ["programmes", `Programmés (${envoisActifs})`],
                 ["envoyes", `Envoyés et clos (${fils.length})`],
                 ["tous", "Tous"],
               ] as [FiltreMessages, string][]
@@ -346,11 +347,15 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
             ))}
           </div>
 
+          {filtreMessages === "programmes" && (
+            <EnvoisProgrammes envois={envois} prospections={prospections} entreprises={entreprises} contacts={contacts} onChange={charger} />
+          )}
+
           {(filtreMessages === "envoyes" || filtreMessages === "tous") && imapActif && (
             <ReponsesPanel onAssociee={remplacerProspection} onFilModifie={charger} />
           )}
 
-          <div className="prospection-liste">
+          <div className="prospection-liste" style={filtreMessages === "programmes" ? { display: "none" } : undefined}>
             {filtreMessages !== "envoyes" && messagesEnCours.length === 0 && filtreMessages === "en_cours" && (
               <p className="track-empty">Aucun message à traiter. Rédige-en un depuis la fiche d&apos;une entreprise.</p>
             )}
@@ -363,13 +368,15 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
                   prospection={p}
                   entreprise={entrepriseParId.get(p.entreprise_id)}
                   contact={p.contact_id ? contactParId.get(p.contact_id) : undefined}
-                  gmailActif={gmailActif}
                   onChange={remplacerProspection}
                   onFilModifie={charger}
                   nbRelances={prospections.filter((r) => r.parent_id === p.id).length}
                   onSupprime={retirerMessages}
                   programmation={envois.find((x) => x.prospection_id === p.id && (x.statut === "programme" || x.statut === "en_cours"))}
-                  onVoirProgrammes={() => setOnglet("programmes")}
+                  onVoirProgrammes={() => {
+                    setFiltreMessages("programmes");
+                    setOnglet("messages");
+                  }}
                 />
               ))}
 
@@ -396,10 +403,6 @@ export default function Prospection({ userId, gmailActif, hunterActif, smtpActif
       )}
 
       {!chargement && onglet === "bilan" && <Bilan prospections={prospections} contacts={contacts} entreprises={entreprises} />}
-
-      {!chargement && onglet === "programmes" && (
-        <EnvoisProgrammes envois={envois} prospections={prospections} entreprises={entreprises} contacts={contacts} onChange={charger} />
-      )}
 
       {!chargement && onglet === "relances" && actionsPrevues.length > 0 && (
         <div className="prospection-bloc">

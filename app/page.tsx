@@ -1,12 +1,10 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import Dashboard from "@/components/Dashboard";
 
-// Le chargement des offres (filtrage, tri, pagination) se fait désormais
-// côté client via la RPC offres_filtrees (voir components/Dashboard.tsx) —
-// cette page ne fait plus que vérifier la session avant de rendre le
-// dashboard, qui va chercher ses propres données.
-export default async function Home() {
+// L'accueil, c'est « Aujourd'hui » : ce qu'il y a à faire ce matin. Les offres vivent
+// sur /offres ; un ancien lien direct vers une offre (/?offre=...) y est renvoyé.
+export default async function Home({ searchParams }: { searchParams: Promise<{ offre?: string }> }) {
+  const { offre } = await searchParams;
   const supabase = await createClient();
 
   const {
@@ -17,5 +15,6 @@ export default async function Home() {
     redirect("/login");
   }
 
-  return <Dashboard />;
+  if (offre && /^[0-9a-f-]{36}$/i.test(offre)) redirect(`/offres?offre=${offre}`);
+  redirect("/aujourdhui");
 }

@@ -68,7 +68,7 @@ export default function PostulerOffre({ prospectionId, entrepriseId, posteVise, 
   }
 
   const lienOuvrir = (offreId: string) => (
-    <a className="action-btn primary" style={{ textDecoration: "none" }} href={`/?offre=${offreId}`} target="_blank" rel="noopener noreferrer">
+    <a className="action-btn primary" style={{ textDecoration: "none" }} href={`/offres?offre=${offreId}`} target="_blank" rel="noopener noreferrer">
       Ouvrir l&apos;offre : CV et lettre
     </a>
   );

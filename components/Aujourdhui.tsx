@@ -106,7 +106,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
       <div className="top-row">
         <div>
           <h1 className="brand-title">
-            <Link href="/" className="brand-link" aria-label="Le Rayon — retour aux offres">
+            <Link href="/aujourdhui" className="brand-link" aria-label="Le Rayon — retour à Aujourd'hui">
               Le Rayon
             </Link>
           </h1>
@@ -116,7 +116,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
           <Link href="/prospection" className="action-btn">
             Candidatures spontanées
           </Link>
-          <Link href="/" className="action-btn">
+          <Link href="/offres" className="action-btn">
             Offres
           </Link>
         </div>
@@ -183,7 +183,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
               </div>
             ))}
           </div>
-          <Link href="/prospection?onglet=programmes" className="action-btn primary" style={{ marginTop: 10, display: "inline-block" }}>
+          <Link href="/prospection?onglet=messages&filtre=programmes" className="action-btn primary" style={{ marginTop: 10, display: "inline-block" }}>
             Voir les envois programmés
           </Link>
         </div>
@@ -200,7 +200,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
               </div>
             ))}
           </div>
-          <Link href="/prospection?onglet=programmes" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
+          <Link href="/prospection?onglet=messages&filtre=programmes" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
             Gérer les envois programmés
           </Link>
         </div>
@@ -239,7 +239,7 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
           <p className="prospection-meta">
             {nouvellesOffres} offre(s) correspondant à tes postes ciblés sont arrivées ces {JOURS_NOUVELLES_OFFRES} derniers jours.
           </p>
-          <Link href="/" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
+          <Link href="/offres" className="action-btn" style={{ marginTop: 10, display: "inline-block" }}>
             Voir les offres
           </Link>
         </div>

@@ -14,9 +14,9 @@ import type { ContactEntreprise, Entreprise, Prospection } from "@/types/prospec
 import FicheEntreprise from "./FicheEntreprise";
 import OffresEntreprise from "./OffresEntreprise";
 import TrouverAdresse from "./TrouverAdresse";
-import { libelleVerification } from "@/lib/hunter/verification";
 import { resumerPriorite, type Priorite } from "@/lib/prospection/priorite";
 import Confirmation from "./Confirmation";
+import ContactLigne from "./ContactLigne";
 import {
   bilanEntreprise,
   modesProposes,
@@ -682,55 +682,17 @@ export default function EntrepriseRow({
             </div>
             {contacts.length === 0 && <p className="prospection-meta">Aucun contact pour l&apos;instant.</p>}
             {contacts.map((c) => (
-              <div key={c.id} className="prospection-contact">
-                <span>
-                  <b>{c.nom}</b>
-                  {c.email_statut === "invalide" && <span className="prospection-erreur"> [adresse invalide]</span>}
-                  {c.email_statut === "ne_plus_contacter" && <span className="prospection-erreur"> [ne plus contacter]</span>}
-                  {c.poste && ` — ${c.poste}`}
-                  {c.email && c.poste && (
-                    <span className={pertinenceContact(c, posteCible).role === "decideur" ? "prospection-info" : "prospection-meta"}>
-                      {" "}
-                      [{pertinenceContact(c, posteCible).libelle}
-                      {choisirMeilleurContact(contacts, posteCible)?.id === c.id ? " · recommandé" : ""}]
-                    </span>
-                  )}
-                  {c.email ? ` — ${c.email}` : " — pas d'e-mail"}
-                  {c.email && (
-                    <span className={c.email_verification === "invalide" ? "prospection-erreur" : "prospection-meta"}>
-                      {" "}
-                      ({libelleVerification(c.email_verification)})
-                    </span>
-                  )}
-                  {c.source_url ? (
-                    <span className="prospection-meta">
-                      {" "}
-                      (
-                      <a href={c.source_url} target="_blank" rel="noopener noreferrer">
-                        {c.origine === "hunter" ? "Hunter · page source" : "page source"}
-                      </a>
-                      )
-                    </span>
-                  ) : (
-                    c.source_email && <span className="prospection-meta"> (source : {c.source_email})</span>
-                  )}
-                </span>
-                <span>
-                  {hunterActif && c.email && (
-                    <>
-                      <button className="prospection-link-btn" onClick={() => verifierContact(c)} disabled={verifContact !== null}>
-                        {verifContact === c.id ? "Vérification..." : "Vérifier"}
-                      </button>{" "}
-                    </>
-                  )}
-                  <button className="prospection-link-btn" onClick={() => basculerContact(c)}>
-                    {c.email_statut === "ok" ? "Ne plus contacter" : "Rétablir"}
-                  </button>{" "}
-                  <button className="prospection-link-btn" onClick={() => supprimerContact(c.id)}>
-                    Supprimer
-                  </button>
-                </span>
-              </div>
+              <ContactLigne
+                key={c.id}
+                contact={c}
+                posteCible={posteCible}
+                recommande={choisirMeilleurContact(contacts, posteCible)?.id === c.id}
+                hunterActif={hunterActif}
+                verificationEnCours={verifContact}
+                onVerifier={verifierContact}
+                onBasculer={basculerContact}
+                onSupprimer={supprimerContact}
+              />
             ))}
             <div className="prospection-contact-form" style={{ marginTop: 10 }}>
               <input

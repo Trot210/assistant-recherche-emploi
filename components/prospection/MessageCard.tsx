@@ -22,7 +22,6 @@ interface Props {
   prospection: Prospection;
   entreprise: Entreprise | undefined;
   contact: ContactEntreprise | undefined;
-  gmailActif: boolean;
   onChange: (prospection: Prospection) => void;
   // Une réponse ou une clôture peut modifier d'autres lignes du même fil.
   onFilModifie: () => void;
@@ -55,7 +54,6 @@ export default function MessageCard({
   prospection,
   entreprise,
   contact,
-  gmailActif,
   onChange,
   onFilModifie,
   nbRelances,
@@ -117,22 +115,6 @@ export default function MessageCard({
     if (!data) return;
     onChange(data.prospection as Prospection);
     if (nom !== "valider") onFilModifie();
-  }
-
-  async function creerBrouillon() {
-    const data = await appeler("brouillon", `/api/prospection/${prospection.id}/brouillon-gmail`, {
-      method: "POST",
-      body: JSON.stringify({ joindre_cv: joindreCv }),
-    });
-    if (!data) return;
-    onChange(data.prospection as Prospection);
-    const avertissementsCv = (data.avertissements_cv as string[]) ?? [];
-    setInfo(
-      avertissementsCv.length > 0
-        ? `Brouillon créé. Vérifie dans le CV joint : ${avertissementsCv.join(" / ")}`
-        : "Brouillon créé dans Gmail — relis-le et envoie-le depuis Gmail.",
-    );
-    if (typeof data.lien_brouillon === "string") window.open(data.lien_brouillon, "_blank", "noopener");
   }
 
   // Date saisie (heure de Paris) → instant, avec les avertissements éventuels.
@@ -282,7 +264,7 @@ export default function MessageCard({
           {modifiable && modifie && (
             <p className="prospection-meta">
               Tu as modifié le texte : enregistre, puis valide-le à nouveau
-              {prospection.statut !== "a_valider" && " (le brouillon Gmail déjà créé ne sera plus à jour)"}.
+              {prospection.statut !== "a_valider" && ""}.
             </p>
           )}
 
@@ -413,19 +395,6 @@ export default function MessageCard({
 
             {prospection.statut === "valide" && !modifie && (
               <>
-                {gmailActif && (
-                  <>
-                    <button
-                      className="action-btn primary"
-                      onClick={creerBrouillon}
-                      disabled={action !== null || !contact?.email}
-                      title={contact?.email ? undefined : "Ajoute un contact avec une adresse e-mail"}
-                    >
-                      {action === "brouillon" ? "Création du brouillon..." : "Créer le brouillon Gmail"}
-                    </button>
-
-                  </>
-                )}
                 <button className="action-btn" onClick={copier}>
                   Copier le message
                 </button>
@@ -435,17 +404,6 @@ export default function MessageCard({
                   </a>
                 )}
               </>
-            )}
-
-            {prospection.statut === "brouillon_gmail" && !modifie && prospection.gmail_message_id && (
-              <a
-                className="action-btn"
-                href={`https://mail.google.com/mail/u/0/#drafts?compose=${prospection.gmail_message_id}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Ouvrir le brouillon
-              </a>
             )}
 
             {(prospection.statut === "valide" || prospection.statut === "brouillon_gmail") && !modifie && (
@@ -466,7 +424,7 @@ export default function MessageCard({
             )}
           </div>
 
-          {!gmailActif && prospection.statut === "valide" && (
+          {prospection.statut === "valide" && (
             <p className="prospection-meta">
               {smtpActif
                 ? "Tu peux aussi copier le message ou l'ouvrir dans ta messagerie."
