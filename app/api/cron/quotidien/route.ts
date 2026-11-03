@@ -5,6 +5,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { lireBilanUsage, ouvrirUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { hunterConfigure, lireQuotaHunter } from "@/lib/hunter/client";
 import { classerRecapRecu, dossierDisponible } from "@/lib/mail/dossier";
+import { nettoyerDossiers } from "@/lib/mail/nettoyage";
+import { JOURS_AVANT_NETTOYAGE } from "@/lib/prospection/nettoyage";
 import { imapConfigure } from "@/lib/mail/imap";
 import { classerEchanges } from "@/lib/prospection/classement-courrier";
 import { detecterReponses } from "@/lib/prospection/detecter-reponses";
@@ -210,6 +212,22 @@ export async function POST(request: Request) {
       15_000,
       null,
     );
+  }
+
+  // Nettoyage des dossiers « Refus » et « En attente réponse » (mails de plus de 30 jours, mis à la
+  // corbeille de la boîte mail). Seulement si le réglage est lisible ET actif : sans lui, rien n'est supprimé.
+  if (!simulation && dossierDisponible()) {
+    const { data: nettoyage, error: nettoyageError } = await supabase.from("reglages").select("purge_dossiers").eq("user_id", userId).maybeSingle();
+    if (!nettoyageError && (nettoyage?.purge_dossiers ?? true)) {
+      await avecDelai(
+        nettoyerDossiers({ jours: JOURS_AVANT_NETTOYAGE, apercu: false }).catch((e): null => {
+          console.error("Nettoyage des dossiers impossible:", e);
+          return null;
+        }),
+        15_000,
+        null,
+      );
+    }
   }
 
   const donnees: DonneesRecap = {

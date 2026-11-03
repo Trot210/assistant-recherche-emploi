@@ -5,6 +5,17 @@ import { useCallback, useEffect, useState } from "react";
 interface Reglages {
   relances_auto: boolean;
   recap_actif: boolean;
+  purge_dossiers: boolean;
+  // Faux tant que la migration 0026 n'est pas appliquée : le réglage ne peut pas être lu.
+  purge_disponible: boolean;
+}
+
+interface BilanNettoyage {
+  apercu: boolean;
+  lignes: { dossier: string; action: "corbeille" | "retirer"; expediteur: string; sujet: string; date: string | null }[];
+  corbeille: number;
+  retires: number;
+  erreurs: string[];
 }
 
 interface LigneClassement {
@@ -82,7 +93,30 @@ export default function Automatisation() {
     charger();
   }, [charger]);
 
-  async function changer(cle: keyof Reglages, valeur: boolean) {
+  const [nettoyage, setNettoyage] = useState<BilanNettoyage | null>(null);
+  const [nettoyageEnCours, setNettoyageEnCours] = useState(false);
+  const [erreurNettoyage, setErreurNettoyage] = useState<string | null>(null);
+
+  async function nettoyer(apercu: boolean) {
+    setNettoyageEnCours(true);
+    setErreurNettoyage(null);
+    try {
+      const res = await fetch("/api/prospection/nettoyage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apercu }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      setNettoyage(data as BilanNettoyage);
+    } catch (e) {
+      setErreurNettoyage(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setNettoyageEnCours(false);
+    }
+  }
+
+  async function changer(cle: "relances_auto" | "recap_actif" | "purge_dossiers", valeur: boolean) {
     setErreur(null);
     const avant = reglages;
     setReglages((r) => (r ? { ...r, [cle]: valeur } : r));
@@ -267,6 +301,58 @@ export default function Automatisation() {
               </li>
             ))}
           </ul>
+        )}
+      </div>
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+        <h3 style={{ marginBottom: 6 }}>Nettoyage des dossiers « Refus » et « En attente réponse »</h3>
+        <p className="prospection-meta" style={{ marginBottom: 8 }}>
+          Un mail reçu il y a plus de 30 jours est mis à la corbeille de ta boîte mail, une fois par jour : tu peux l&apos;y récupérer, et ce site
+          n&apos;efface rien définitivement ni ne vide la corbeille (Gmail l&apos;efface lui-même après 30 jours de plus). Un mail aussi rangé dans
+          « Prospection » est seulement retiré du dossier et reste dans « Prospection ». Le délai part de la date de réception du mail.
+        </p>
+        <label className="prospection-meta" style={{ display: "block" }}>
+          <input
+            type="checkbox"
+            checked={reglages.purge_dossiers}
+            disabled={!reglages.purge_disponible}
+            onChange={(e) => changer("purge_dossiers", e.target.checked)}
+          />{" "}
+          Nettoyer ces dossiers automatiquement chaque matin
+          {!reglages.purge_disponible && " (indisponible : migration 0026 à appliquer dans Supabase)"}
+        </label>
+        <div className="prospection-actions" style={{ marginTop: 8 }}>
+          <button className="action-btn" onClick={() => nettoyer(true)} disabled={nettoyageEnCours}>
+            {nettoyageEnCours && !nettoyage ? "Lecture..." : "Voir ce qui serait nettoyé"}
+          </button>
+          {nettoyage?.apercu && nettoyage.lignes.length > 0 && (
+            <button className="action-btn danger" onClick={() => nettoyer(false)} disabled={nettoyageEnCours}>
+              {nettoyageEnCours ? "Nettoyage..." : `Nettoyer maintenant (${nettoyage.lignes.length})`}
+            </button>
+          )}
+        </div>
+        {erreurNettoyage && <p className="prospection-erreur" style={{ marginTop: 8 }}>{erreurNettoyage}</p>}
+        {nettoyage && (
+          <div style={{ marginTop: 8 }}>
+            {nettoyage.apercu ? (
+              <p className="prospection-meta">
+                {nettoyage.lignes.length === 0 ? "Rien à nettoyer : aucun mail n'a plus de 30 jours dans ces dossiers." : `${nettoyage.lignes.length} mail(s) de plus de 30 jours :`}
+              </p>
+            ) : (
+              <p className="prospection-info">
+                {nettoyage.corbeille} mis à la corbeille, {nettoyage.retires} retiré(s) du dossier.
+              </p>
+            )}
+            {nettoyage.erreurs.length > 0 && <p className="prospection-erreur">Erreurs : {[...new Set(nettoyage.erreurs)].slice(0, 2).join(" ; ")}</p>}
+            {nettoyage.apercu && nettoyage.lignes.length > 0 && (
+              <ul style={{ margin: "6px 0 0 18px" }}>
+                {nettoyage.lignes.slice(0, 20).map((l, i) => (
+                  <li key={i} className="prospection-meta">
+                    {l.dossier} · {l.date} · {l.expediteur} — {l.sujet.slice(0, 50)} · {l.action === "corbeille" ? "corbeille" : "retiré du dossier"}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         )}
       </div>
       {apercu && (

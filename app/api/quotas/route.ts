@@ -35,12 +35,20 @@ export async function GET() {
     .select("relances_auto, recap_actif")
     .eq("user_id", user.id)
     .maybeSingle();
+  // Colonne ajoutée par la migration 0026 : lue à part, pour que l'écran marche avant qu'elle soit appliquée.
+  const { data: nettoyage, error: nettoyageError } = await supabase.from("reglages").select("purge_dossiers").eq("user_id", user.id).maybeSingle();
 
   return NextResponse.json({
     claude,
     hunter,
     // Sans ligne de réglages, les options automatiques sont activées par défaut.
-    reglages: { relances_auto: reglages?.relances_auto ?? true, recap_actif: reglages?.recap_actif ?? true },
+    reglages: {
+      relances_auto: reglages?.relances_auto ?? true,
+      recap_actif: reglages?.recap_actif ?? true,
+      // Désactivé tant que la migration n'est pas appliquée : rien n'est supprimé sans réglage lisible.
+      purge_dossiers: nettoyageError ? false : (nettoyage?.purge_dossiers ?? true),
+      purge_disponible: !nettoyageError,
+    },
   });
 }
 
@@ -67,7 +75,7 @@ export async function PUT(request: Request) {
     }
     patch.plafond_claude_usd = Math.round(plafond * 100) / 100;
   }
-  for (const cle of ["relances_auto", "recap_actif"] as const) {
+  for (const cle of ["relances_auto", "recap_actif", "purge_dossiers"] as const) {
     if (corps?.[cle] === undefined) continue;
     if (typeof corps[cle] !== "boolean") return NextResponse.json({ error: `${cle} doit être vrai ou faux` }, { status: 400 });
     patch[cle] = corps[cle];

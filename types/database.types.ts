@@ -613,6 +613,7 @@ export interface Database {
           plafond_claude_usd: number;
           relances_auto: boolean;
           recap_actif: boolean;
+          purge_dossiers: boolean;
           dernier_traitement: string | null;
           envois_max_par_jour: number;
           envois_ecart_minutes: number;
@@ -623,6 +624,7 @@ export interface Database {
           plafond_claude_usd?: number;
           relances_auto?: boolean;
           recap_actif?: boolean;
+          purge_dossiers?: boolean;
           dernier_traitement?: string | null;
           envois_max_par_jour?: number;
           envois_ecart_minutes?: number;
