@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { classerEnvoiRecent } from "@/lib/mail/dossier";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { libelleCv, lireCvReference, nomPieceJointeCv } from "@/lib/prospection/cv";
 import { premierBlocage } from "@/lib/prospection/politique";
@@ -147,6 +148,9 @@ export async function envoyerProspection(
       .eq("user_id", userId)
       .select()
       .single();
+
+    // Le message est parti : on le copie dans le dossier « Prospection » (sans jamais faire échouer l'envoi).
+    await classerEnvoiRecent(messageId);
 
     if (transition.parent && parent) {
       await supabase

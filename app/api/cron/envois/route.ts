@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { classerEchanges } from "@/lib/prospection/classement-courrier";
+import { dossierDisponible } from "@/lib/mail/dossier";
+import { decomposerParis } from "@/lib/prospection/planification";
 import { executerEnvoisDus } from "@/lib/prospection/programmations";
 
 // Chaque envoi peut prendre quelques secondes (CV à lire, connexion au serveur de messagerie).
@@ -18,8 +21,24 @@ export async function POST(request: Request) {
   if (!userId) return NextResponse.json({ error: "SYNC_USER_ID non configuré côté serveur" }, { status: 500 });
 
   try {
-    const bilan = await executerEnvoisDus(createAdminClient(), userId);
-    return NextResponse.json(bilan);
+    const supabase = createAdminClient();
+    const bilan = await executerEnvoisDus(supabase, userId);
+
+    // Toutes les dix minutes : les réponses arrivées en boîte de réception depuis hier qui
+    // concernent la prospection sont déplacées dans le dossier « Prospection ». Jamais bloquant.
+    let classement: { deplaces: number } | null = null;
+    if (dossierDisponible() && Number(decomposerParis(new Date()).heure.split(":")[1]) % 10 === 0) {
+      try {
+        const r = await Promise.race([
+          classerEchanges(supabase, userId, { jours: 1, apercu: false, envoyes: false }),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 30_000)),
+        ]);
+        classement = r?.bilan ? { deplaces: r.bilan.deplaces + r.bilan.ajoutes } : null;
+      } catch (e) {
+        console.error("Classement des réponses dans le dossier impossible:", e);
+      }
+    }
+    return NextResponse.json({ ...bilan, classement });
   } catch (e) {
     console.error("Erreur du planificateur d'envois:", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur inconnue" }, { status: 500 });

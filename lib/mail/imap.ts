@@ -43,6 +43,23 @@ function texteDepuisHtml(html: string): string {
     .replace(/[ \t]+/g, " ");
 }
 
+// Connexion IMAP configurée comme pour la lecture des réponses (mêmes délais : sans eux, une
+// boîte qui ne répond pas bloquerait la requête pendant plus d'une minute).
+export function creerClientImap(): ImapFlow {
+  const { user, pass } = identifiants();
+  if (!user || !pass) throw new ImapNonConfigure();
+  return new ImapFlow({
+    host: process.env.IMAP_HOST ?? "imap.gmail.com",
+    port: Number(process.env.IMAP_PORT ?? 993),
+    secure: true,
+    auth: { user, pass },
+    logger: false,
+    connectionTimeout: 15_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 40_000,
+  });
+}
+
 const TAILLE_MAX_MESSAGE = 150_000;
 const TEXTE_MAX = 8000;
 

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { classerEnvoiRecent } from "@/lib/mail/dossier";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { cleEnvoiReponse, refusEnvoiReponse, type ConseilReponse } from "@/lib/prospection/conseil-reponse";
 import { premierBlocage } from "@/lib/prospection/politique";
@@ -115,6 +116,7 @@ export async function envoyerReponse(
     });
 
     await supabase.from("reponses_envoyees").update({ smtp_message_id: messageId }).eq("id", reservation.id).eq("user_id", userId);
+    await classerEnvoiRecent(messageId);
     return { ok: true, destinataire, envoye_le: new Date().toISOString() };
   } catch (e) {
     // Rien n'est parti : on libère la réponse pour qu'elle puisse être renvoyée.

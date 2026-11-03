@@ -4,7 +4,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lireBilanUsage, ouvrirUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { hunterConfigure, lireQuotaHunter } from "@/lib/hunter/client";
+import { dossierDisponible } from "@/lib/mail/dossier";
 import { imapConfigure } from "@/lib/mail/imap";
+import { classerEchanges } from "@/lib/prospection/classement-courrier";
 import { detecterReponses } from "@/lib/prospection/detecter-reponses";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { offrePertinente } from "@/lib/prospection/offres";
@@ -196,6 +198,19 @@ export async function POST(request: Request) {
     .slice(0, 3);
 
   const nouvellesReponses = await lecture;
+
+  // Filet de sécurité du matin : copie dans le dossier « Prospection » les messages envoyés ces
+  // derniers jours et déplace les réponses reçues, au cas où un passage aurait échoué.
+  if (!simulation && dossierDisponible()) {
+    await avecDelai(
+      classerEchanges(supabase, userId, { jours: 3, apercu: false }).catch((e): null => {
+        console.error("Classement du matin dans le dossier impossible:", e);
+        return null;
+      }),
+      15_000,
+      null,
+    );
+  }
 
   const donnees: DonneesRecap = {
     aujourdhui,
