@@ -8,7 +8,7 @@ interface Reglages {
 }
 
 interface LigneClassement {
-  sens: "recu" | "envoye";
+  sens: "recu" | "envoye" | "recap";
   entreprise: string;
   detail: string;
   date: string | null;
@@ -18,6 +18,7 @@ interface ResultatClassement {
   apercu: boolean;
   dossier: string;
   nbRecus: number;
+  nbRecaps?: number;
   nbEnvoyes: number;
   lignes: LigneClassement[];
   bilan: { dossierCree: boolean; copies: number; deplaces: number; ajoutes: number; introuvables: number; erreurs: string[] } | null;
@@ -127,17 +128,17 @@ export default function Automatisation() {
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
         <h3 style={{ marginBottom: 6 }}>Dossier « Prospection 🥶 » dans ta boîte mail</h3>
         <p className="prospection-meta" style={{ marginBottom: 8 }}>
-          Chaque message que le site envoie y est copié (il reste aussi dans « Envoyés »), et les réponses des entreprises y sont déplacées
-          hors de ta boîte de réception, toutes les dix minutes environ. Seuls les messages rattachés à une candidature sont touchés ; rien
+          Chaque message que le site envoie y est copié (il reste aussi dans « Envoyés »), et les réponses des entreprises ainsi que le
+          récapitulatif du matin y sont déplacés hors de ta boîte de réception, toutes les dix minutes environ. Seuls les messages rattachés à une candidature sont touchés ; rien
           n&apos;est supprimé. Ici : reprendre ce qui existe déjà.
         </p>
         <div className="prospection-actions">
           <button className="action-btn" onClick={() => classer(true)} disabled={classementEnCours}>
             {classementEnCours && !classement ? "Lecture de la boîte..." : "Voir ce qui serait classé"}
           </button>
-          {classement?.apercu && (classement.nbRecus > 0 || classement.nbEnvoyes > 0) && (
+          {classement?.apercu && (classement.nbRecus > 0 || (classement.nbRecaps ?? 0) > 0 || classement.nbEnvoyes > 0) && (
             <button className="action-btn primary" onClick={() => classer(false)} disabled={classementEnCours}>
-              {classementEnCours ? "Classement..." : `Classer maintenant (${classement.nbEnvoyes} envoyé(s), ${classement.nbRecus} réponse(s))`}
+              {classementEnCours ? "Classement..." : `Classer maintenant (${classement.nbEnvoyes} envoyé(s), ${classement.nbRecus} réponse(s), ${classement.nbRecaps ?? 0} récapitulatif(s))`}
             </button>
           )}
         </div>
@@ -146,8 +147,8 @@ export default function Automatisation() {
           <div style={{ marginTop: 10 }}>
             {classement.apercu ? (
               <p className="prospection-meta">
-                À classer : {classement.nbEnvoyes} message(s) envoyé(s) à copier, {classement.nbRecus} réponse(s) à déplacer hors de la boîte de
-                réception.
+                À classer : {classement.nbEnvoyes} message(s) envoyé(s) à copier, {classement.nbRecus} réponse(s) et {classement.nbRecaps ?? 0}{" "}
+                récapitulatif(s) du matin à déplacer hors de la boîte de réception.
               </p>
             ) : (
               <p className="prospection-info">

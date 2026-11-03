@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classerDansDossier, lireEntetesParExpediteurs, lireEntrantsRecents, type BilanDossier } from "@/lib/mail/dossier";
 import { critereRecherche, rapprocher, type CritereRecherche, type EnvoiConnu, type ReponseBrute } from "@/lib/prospection/reponses";
+import { estSujetRecap } from "@/lib/prospection/recap";
 import { ajouterJours, aujourdhuiParis } from "@/lib/prospection/workflow";
 import type { Database } from "@/types/database.types";
 
@@ -31,8 +32,20 @@ export function choisirRecusAClasser(entrants: ReponseBrute[], envois: EnvoiConn
   return choisis;
 }
 
+// Récapitulatifs du matin que le site s'est envoyés à lui-même : ils concernent la prospection, ils
+// vont dans le même dossier. Reconnus à l'expéditeur (soi) et à leur objet exact.
+export function choisirRecapsAClasser(entrants: ReponseBrute[], adresseUtilisateur: string): ReponseBrute[] {
+  const moi = adresseUtilisateur.trim().toLowerCase();
+  const vus = new Set<string>();
+  return entrants.filter((m) => {
+    if (!m.messageIdBrut || vus.has(m.messageId) || m.fromEmail.trim().toLowerCase() !== moi || !estSujetRecap(m.sujet)) return false;
+    vus.add(m.messageId);
+    return true;
+  });
+}
+
 export interface LigneApercu {
-  sens: "recu" | "envoye";
+  sens: "recu" | "envoye" | "recap";
   entreprise: string;
   detail: string;
   date: string | null;
@@ -41,6 +54,7 @@ export interface LigneApercu {
 export interface ResultatClassement {
   apercu: boolean;
   nbRecus: number;
+  nbRecaps: number;
   nbEnvoyes: number;
   lignes: LigneApercu[];
   bilan: BilanDossier | null;
@@ -108,14 +122,19 @@ export async function classerEchanges(supabase: SupabaseClient<Database>, userId
     entrants = await lireEntrantsRecents({ depuis });
   }
   const recus = choisirRecusAClasser(entrants, envois, moi);
+  // Les récapitulatifs sont dans la boîte de réception : en reprise de l'existant, on la lit aussi
+  // (en-têtes seulement), car la lecture par expéditeurs ci-dessus ne les voit pas.
+  const entrantsRecaps = options.toutes ? await lireEntrantsRecents({ depuis }) : entrants;
+  const recaps = choisirRecapsAClasser(entrantsRecaps, moi);
 
   const lignes: LigneApercu[] = [
     ...recus.map((r) => ({ sens: "recu" as const, entreprise: entrepriseDe(r.prospectionId), detail: `${r.message.fromNom ?? r.message.fromEmail} — ${r.message.sujet || "(sans objet)"}`, date: r.message.date.toISOString().slice(0, 10) })),
+    ...recaps.map((m) => ({ sens: "recap" as const, entreprise: "Récapitulatif du matin", detail: m.sujet, date: m.date.toISOString().slice(0, 10) })),
     ...envoyes.map((e) => ({ sens: "envoye" as const, entreprise: e.entreprise, detail: "message envoyé", date: e.date })),
   ];
-  const resultat: ResultatClassement = { apercu: options.apercu, nbRecus: recus.length, nbEnvoyes: envoyes.length, lignes, bilan: null };
-  if (options.apercu || (recus.length === 0 && envoyes.length === 0)) return resultat;
+  const resultat: ResultatClassement = { apercu: options.apercu, nbRecus: recus.length, nbRecaps: recaps.length, nbEnvoyes: envoyes.length, lignes, bilan: null };
+  if (options.apercu || (recus.length === 0 && recaps.length === 0 && envoyes.length === 0)) return resultat;
 
-  resultat.bilan = await classerDansDossier({ envoyes: envoyes.map((e) => e.id), recus: recus.map((r) => r.message.messageIdBrut as string) });
+  resultat.bilan = await classerDansDossier({ envoyes: envoyes.map((e) => e.id), recus: [...recus.map((r) => r.message.messageIdBrut as string), ...recaps.map((m) => m.messageIdBrut as string)] });
   return resultat;
 }

@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lireBilanUsage, ouvrirUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { hunterConfigure, lireQuotaHunter } from "@/lib/hunter/client";
-import { dossierDisponible } from "@/lib/mail/dossier";
+import { classerRecapRecu, dossierDisponible } from "@/lib/mail/dossier";
 import { imapConfigure } from "@/lib/mail/imap";
 import { classerEchanges } from "@/lib/prospection/classement-courrier";
 import { detecterReponses } from "@/lib/prospection/detecter-reponses";
@@ -246,8 +246,10 @@ export async function POST(request: Request) {
   let recapErreur: string | null = null;
   if (recap && recapActif && !simulation && smtpConfigure()) {
     try {
-      await envoyerEmail({ a: process.env.SMTP_USER as string, objet: recap.sujet, corps: recap.texte, nomExpediteur: "Le Rayon" });
+      const { messageId } = await envoyerEmail({ a: process.env.SMTP_USER as string, objet: recap.sujet, corps: recap.texte, nomExpediteur: "Le Rayon" });
       recapEnvoye = true;
+      // Le récapitulatif arrive en boîte de réception : on le range avec le reste de la prospection.
+      await classerRecapRecu(messageId);
     } catch (e) {
       console.error("Envoi du récapitulatif impossible:", e);
       recapErreur = e instanceof Error ? e.message : "erreur inconnue";

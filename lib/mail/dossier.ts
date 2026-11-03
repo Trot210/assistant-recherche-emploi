@@ -74,14 +74,20 @@ async function copierEnvoyes(client: ImapFlow, dossier: string, ids: string[], b
 
 // Déplace dans le dossier les réponses reçues : retirées de la boîte de réception, ajoutées au
 // dossier. Une réponse déjà archivée est seulement ajoutée au dossier.
-async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier) {
+async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier, reessais = 0) {
   const archives: string[] = [];
 
   const verrouBoite = await client.getMailboxLock("INBOX");
   try {
     for (const id of ids) {
       try {
-        const uids = await trouver(client, id);
+        let uids: number[] = [];
+        // Un message qu'on vient de s'envoyer à soi-même peut mettre un instant à arriver.
+        for (let essai = 0; essai <= reessais; essai++) {
+          uids = await trouver(client, id);
+          if (uids.length > 0) break;
+          if (essai < reessais) await new Promise((r) => setTimeout(r, 1500));
+        }
         if (uids.length === 0) {
           archives.push(id);
           continue;
@@ -124,6 +130,7 @@ export async function classerDansDossier(params: {
   envoyes?: string[];
   recus?: string[];
   reessaisEnvoyes?: number;
+  reessaisRecus?: number;
 }): Promise<BilanDossier> {
   const bilan: BilanDossier = { ...BILAN_VIDE, erreurs: [] };
   const envoyes = params.envoyes ?? [];
@@ -135,7 +142,7 @@ export async function classerDansDossier(params: {
     const { chemin, cree } = await assurerDossier(client);
     bilan.dossierCree = cree;
     if (envoyes.length > 0) await copierEnvoyes(client, chemin, envoyes, bilan, params.reessaisEnvoyes ?? 0);
-    if (recus.length > 0) await deplacerRecus(client, chemin, recus, bilan);
+    if (recus.length > 0) await deplacerRecus(client, chemin, recus, bilan, params.reessaisRecus ?? 0);
   } finally {
     await client.logout().catch(() => undefined);
   }
@@ -240,4 +247,19 @@ export async function lireEntetesParExpediteurs(params: {
     await client.logout().catch(() => undefined);
   }
   return [...trouves.values()];
+}
+
+// Juste après l'envoi du récapitulatif du matin (adressé à soi-même) : le range dans le dossier,
+// hors de la boîte de réception. Même règle que pour un envoi : jamais bloquant.
+export async function classerRecapRecu(messageId: string): Promise<void> {
+  if (!dossierDisponible()) return;
+  try {
+    const bilan = await Promise.race([
+      classerDansDossier({ recus: [messageId], reessaisRecus: 4 }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 15_000)),
+    ]);
+    if (bilan && bilan.erreurs.length > 0) console.error("Classement du récapitulatif dans le dossier:", bilan.erreurs.join(" ; "));
+  } catch (e) {
+    console.error("Classement du récapitulatif dans le dossier impossible:", e);
+  }
 }

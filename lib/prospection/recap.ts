@@ -126,3 +126,9 @@ export function construireRecap(d: DonneesRecap): Recap | null {
     nbActions,
   };
 }
+
+// Objet des récapitulatifs du matin : sert à les reconnaître dans la boîte mail (ils sont
+// envoyés à soi-même) pour les ranger avec le reste de la prospection.
+export function estSujetRecap(sujet: string): boolean {
+  return /^Le Rayon — \d+ choses? à faire aujourd'hui/.test(sujet.trim());
+}

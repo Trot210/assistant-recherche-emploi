@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { choisirRecusAClasser } from "./classement-courrier";
+import { choisirRecapsAClasser, choisirRecusAClasser } from "./classement-courrier";
+import { estSujetRecap } from "./recap";
 import type { EnvoiConnu, ReponseBrute } from "./reponses";
 
 const envois: EnvoiConnu[] = [
@@ -65,5 +66,26 @@ describe("choisirRecusAClasser", () => {
   it("repère un rapport de non-distribution qui cite notre message", () => {
     const entrants = [recu("m1", { fromEmail: "mailer-daemon@googlemail.com", references: ["orig-2@gmail.com"] })];
     expect(choisirRecusAClasser(entrants, envois, MOI)[0]?.prospectionId).toBe("p2");
+  });
+});
+
+describe("estSujetRecap / choisirRecapsAClasser", () => {
+  it("reconnaît l'objet du récapitulatif du matin, au singulier comme au pluriel", () => {
+    expect(estSujetRecap("Le Rayon — 11 choses à faire aujourd'hui")).toBe(true);
+    expect(estSujetRecap("Le Rayon — 1 chose à faire aujourd'hui")).toBe(true);
+    expect(estSujetRecap("Le Rayon — nouveautés")).toBe(false);
+    expect(estSujetRecap("Re: Candidature spontanée")).toBe(false);
+  });
+
+  it("ne retient que les récapitulatifs envoyés par soi-même, sans doublon", () => {
+    const sujet = "Le Rayon — 4 choses à faire aujourd'hui";
+    const entrants = [
+      recu("r1", { fromEmail: "MOI@gmail.com", sujet }),
+      recu("r1", { fromEmail: "moi@gmail.com", sujet }),
+      recu("r2", { fromEmail: "moi@gmail.com", sujet: "Facture" }),
+      recu("r3", { fromEmail: "inconnu@autre.example", sujet }),
+      recu("r4", { fromEmail: "moi@gmail.com", sujet, messageIdBrut: undefined }),
+    ];
+    expect(choisirRecapsAClasser(entrants, MOI).map((m) => m.messageId)).toEqual(["r1"]);
   });
 });
