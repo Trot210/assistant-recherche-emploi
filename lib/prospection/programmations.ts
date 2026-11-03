@@ -112,6 +112,16 @@ export async function executerEnvoisDus(supabase: Client, userId: string, mainte
   });
   bilan.report = decision.raison;
 
+  // Rien ne part : on note pourquoi sur les envois en retard, pour que l'écran le dise au lieu
+  // de les laisser « programmés » sans explication.
+  if (decision.aEnvoyer.length === 0 && decision.raison) {
+    await supabase
+      .from("envois_programmes")
+      .update({ erreur: decision.raison })
+      .in("id", dus.map((d) => d.id))
+      .eq("statut", "programme");
+  }
+
   for (const id of decision.aEnvoyer) {
     const ligne = dus.find((d) => d.id === id);
     if (!ligne) continue;

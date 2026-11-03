@@ -190,3 +190,56 @@ describe("etalerEnvois : mode recommandé (mardi à jeudi, le matin)", () => {
     expect(o.some((x) => parseInt(x.heure, 10) >= 12)).toBe(true);
   });
 });
+
+describe("choisirEnvoisDus : rattrapage d'un envoi en retard", () => {
+  const base = { dernierEnvoi: null as Date | null, nbEnvoyesAujourdhui: 0, maxParJour: 6, ecartMinutes: 10 };
+
+  it("n'envoie pas en pleine nuit un envoi resté en retard (la limite du jour repart de zéro à minuit)", () => {
+    // Mardi 3 novembre 2026, 0 h 01 à Paris : l'envoi était prévu la veille à 16 h 49.
+    const d = choisirEnvoisDus({
+      ...base,
+      maintenant: new Date("2026-11-02T23:01:00Z"),
+      programmes: [{ id: "x", prevu_at: "2026-11-02T15:49:00Z" }],
+    });
+    expect(d.aEnvoyer).toEqual([]);
+    expect(d.raison).toMatch(/hors des heures de bureau/);
+  });
+
+  it("l'envoie à l'ouverture des heures de bureau", () => {
+    const d = choisirEnvoisDus({
+      ...base,
+      maintenant: new Date("2026-11-03T07:05:00Z"), // 8 h 05 à Paris
+      programmes: [{ id: "x", prevu_at: "2026-11-02T15:49:00Z" }],
+    });
+    expect(d.aEnvoyer).toEqual(["x"]);
+  });
+
+  it("n'envoie pas un envoi en retard le week-end", () => {
+    const d = choisirEnvoisDus({
+      ...base,
+      maintenant: new Date("2026-11-07T10:00:00Z"), // samedi 11 h
+      programmes: [{ id: "x", prevu_at: "2026-11-06T09:00:00Z" }],
+    });
+    expect(d.aEnvoyer).toEqual([]);
+  });
+
+  it("envoie à l'heure un envoi programmé volontairement hors bureau", () => {
+    const d = choisirEnvoisDus({
+      ...base,
+      maintenant: new Date("2026-11-03T06:31:00Z"), // 7 h 31 à Paris
+      programmes: [{ id: "x", prevu_at: "2026-11-03T06:30:00Z" }],
+    });
+    expect(d.aEnvoyer).toEqual(["x"]);
+  });
+
+  it("garde le report par plafond du jour", () => {
+    const d = choisirEnvoisDus({
+      ...base,
+      nbEnvoyesAujourdhui: 6,
+      maintenant: new Date("2026-11-02T15:50:00Z"),
+      programmes: [{ id: "x", prevu_at: "2026-11-02T15:49:00Z" }],
+    });
+    expect(d.aEnvoyer).toEqual([]);
+    expect(d.raison).toMatch(/limite de 6 envois/);
+  });
+});

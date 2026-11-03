@@ -197,6 +197,9 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
               <div key={x.id} className="prospection-ligne">
                 <div className="prospection-titre">{nomEnvoi(x)}</div>
                 <div className="prospection-meta">{formaterProgrammation(new Date(x.prevu_at))}</div>
+                {x.statut === "programme" && x.erreur && new Date(x.prevu_at).getTime() < Date.now() && (
+                  <div className="prospection-erreur">En retard : {x.erreur}</div>
+                )}
               </div>
             ))}
           </div>

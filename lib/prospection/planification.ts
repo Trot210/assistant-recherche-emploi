@@ -8,6 +8,8 @@ export const DELAI_RETENTATIVE_MINUTES = 30;
 // Un envoi « en cours » depuis plus longtemps a été interrompu (fonction coupée).
 export const DELAI_INTERRUPTION_MINUTES = 15;
 export const HORIZON_MAX_JOURS = 120;
+// Au-delà de ce retard, un envoi n'est plus « à l'heure » : hors heures de bureau, il attend le matin.
+export const RETARD_TOLERE_MINUTES = 90;
 
 const FUSEAU = "Europe/Paris";
 
@@ -123,13 +125,27 @@ export function choisirEnvoisDus(params: {
     .sort((a, b) => a.prevu_at.localeCompare(b.prevu_at));
   if (dus.length === 0) return { aEnvoyer: [], raison: null };
 
+  // Un envoi en retard (plafond du jour atteint, écart minimal...) ne rattrape pas son
+  // retard en pleine nuit ni le week-end : à minuit, la limite du jour repart de zéro et
+  // tout partirait d'un coup. Il attend la prochaine matinée ouvrée. Un envoi à l'heure
+  // part toujours, même à l'heure choisie hors bureau.
+  const { heure, jourSemaine } = decomposerParis(params.maintenant);
+  const h = parseInt(heure, 10);
+  const horsBureau = h < 8 || h >= 19 || jourSemaine === 0 || jourSemaine === 6;
+  const partables = horsBureau
+    ? dus.filter((e) => params.maintenant.getTime() - new Date(e.prevu_at).getTime() <= RETARD_TOLERE_MINUTES * 60_000)
+    : dus;
+  if (partables.length === 0) {
+    return { aEnvoyer: [], raison: "en retard et hors des heures de bureau : reporté à la prochaine matinée ouvrée (8 h–19 h)" };
+  }
+
   if (params.nbEnvoyesAujourdhui >= params.maxParJour) {
     return { aEnvoyer: [], raison: `limite de ${params.maxParJour} envois par jour atteinte : reporté à demain` };
   }
   if (params.dernierEnvoi && params.maintenant.getTime() - params.dernierEnvoi.getTime() < params.ecartMinutes * 60_000) {
     return { aEnvoyer: [], raison: `moins de ${params.ecartMinutes} minutes depuis le dernier envoi : reporté au prochain passage` };
   }
-  return { aEnvoyer: [dus[0].id], raison: dus.length > 1 ? "les autres partiront aux passages suivants, avec l'écart minimal" : null };
+  return { aEnvoyer: [partables[0].id], raison: partables.length > 1 ? "les autres partiront aux passages suivants, avec l'écart minimal" : null };
 }
 
 export interface ResultatEchec {

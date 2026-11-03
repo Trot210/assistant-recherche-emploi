@@ -184,7 +184,12 @@ export default function EnvoisProgrammes({ envois, prospections, entreprises, co
                       <b>{formaterProgrammation(new Date(e.prevu_at))}</b> · {LIBELLES[e.statut]}
                       {e.tentatives > 0 && ` · ${e.tentatives} essai(s)`}
                     </div>
-                    {e.erreur && <div className="prospection-erreur">Dernier incident : {e.erreur}</div>}
+                    {e.erreur && (
+                      <div className="prospection-erreur">
+                        {e.statut === "programme" && new Date(e.prevu_at).getTime() < Date.now() ? "En retard : " : "Dernier incident : "}
+                        {e.erreur}
+                      </div>
+                    )}
                   </div>
                   {modifiable && !editing && (
                     <div className="prospection-actions">
