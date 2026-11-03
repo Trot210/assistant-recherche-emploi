@@ -5,7 +5,10 @@ import { anthropic } from "@/lib/anthropic/client";
 import {
   assainirFiche,
   choisirSiteDansResultats,
+  extraireObjetJson,
+  ficheUtilisable,
   pageMentionne,
+  sourcesDepuisBlocs,
   type FicheBrute,
   type SourcesRecherche,
 } from "@/lib/prospection/fiche";
@@ -117,6 +120,60 @@ Réponds uniquement par l'adresse de la page d'accueil (https://...), sans autre
   return null;
 }
 
+// Schéma de la fiche par recherche web : sans contacts (aucune adresse ne peut y être
+// vérifiée mot pour mot sur une page) ; la recherche de contacts passe par Hunter ou la saisie.
+const FicheParRechercheSchema = FicheSchema.omit({ contacts_publics: true });
+
+// Quand le site de l'entreprise refuse la lecture automatique (cas fréquent des grands
+// groupes), la fiche est établie à partir de quelques recherches web : un appel payant
+// (de l'ordre de quelques centimes), limité à 3 recherches. Chaque fait doit citer un lien
+// réellement renvoyé par la recherche, comme pour une fiche lue sur le site.
+async function genererFicheParRecherche(entreprise: Entreprise, site: string): Promise<Fiche | null> {
+  const response = await anthropic.messages.create({
+    model: MODELE,
+    max_tokens: 6000,
+    tools: [
+      {
+        type: "web_search_20260209",
+        name: "web_search",
+        max_uses: 3,
+        user_location: { type: "approximate", country: "FR", timezone: "Europe/Paris" },
+      },
+    ],
+    messages: [
+      {
+        role: "user",
+        content: `Tu prépares la fiche d'une entreprise pour une candidature spontanée. Son site officiel (${site}) refuse la lecture automatique : fais jusqu'à trois recherches web ciblées (activité et marques, enjeux et actualités récents, orientations stratégiques) sur des pages institutionnelles, de presse ou de carrières.
+
+${descriptionEntreprise(entreprise)}
+
+Règles :
+- N'écris que ce que les pages trouvées établissent ; omets ce qui n'est pas établi, une liste vide vaut mieux qu'un fait douteux.
+- Chaque « source_url » est le lien EXACT d'un résultat que tes recherches ont renvoyé.
+- N'écris aucune personne ni adresse e-mail.
+- « postes_suggeres » : au plus 3 postes choisis UNIQUEMENT parmi : ${POSTES_CIBLES.join(", ")}, avec une raison d'une phrase liée à un fait précis.
+
+Réponds UNIQUEMENT par un objet JSON de la forme :
+{"activite": "...", "marques": [{"texte": "...", "source_url": "..."}], "enjeux": [{"texte": "...", "source_url": "..."}], "actualites": [{"texte": "...", "source_url": "..."}], "postes_suggeres": [{"poste": "...", "raison": "..."}]}`,
+      },
+    ],
+  });
+
+  const blocs = response.content as unknown as Parameters<typeof sourcesDepuisBlocs>[0];
+  const texte = response.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+  const analyse = FicheParRechercheSchema.safeParse(extraireObjetJson(texte));
+  if (!analyse.success) return null;
+
+  const fiche = assainirFiche(
+    { ...analyse.data, site_web: site, adresse_candidature: null, contacts_publics: [] },
+    sourcesDepuisBlocs(blocs),
+  );
+  return ficheUtilisable(fiche) ? { ...fiche, lecture: "recherche_web" } : null;
+}
+
 function sourcesDepuisPages(pages: PageLue[]): SourcesRecherche {
   return {
     urls: pages.map((p) => p.url),
@@ -134,8 +191,14 @@ export async function genererFicheEntreprise(entreprise: Entreprise): Promise<Fi
 
   const pages = await lirePagesPubliques(site);
   if (pages.length === 0) {
+    // Site illisible (souvent une protection anti-robots) : on s'appuie sur la recherche web.
+    const parRecherche = await genererFicheParRecherche(entreprise, site).catch((e) => {
+      console.error("Fiche par recherche web impossible:", e);
+      return null;
+    });
+    if (parRecherche) return parRecherche;
     throw new Error(
-      `Le site ${site} n'a pas pu être lu (accès refusé ou trop lent). Vérifie l'adresse dans la fiche, ou ajoute les contacts à la main`,
+      `Le site ${site} refuse la lecture automatique (ou est trop lent) et la recherche web n'a rien donné d'assez sûr. Essaie une autre adresse (le site du groupe, par exemple), ou ajoute les contacts à la main`,
     );
   }
 

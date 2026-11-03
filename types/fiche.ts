@@ -25,6 +25,9 @@ export interface PosteSuggere {
 }
 
 export interface Fiche {
+  // Comment la fiche a été établie : en lisant le site (par défaut), ou par recherche web
+  // quand le site de l'entreprise refuse la lecture automatique.
+  lecture?: "site" | "recherche_web";
   site_web: string | null;
   activite: string;
   marques: FaitSource[];

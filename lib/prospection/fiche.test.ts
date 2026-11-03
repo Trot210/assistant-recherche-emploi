@@ -5,7 +5,10 @@ import {
   cleUrl,
   extraireDomaine,
   pageMentionne,
+  extraireObjetJson,
+  ficheUtilisable,
   resumerFiche,
+  sourcesDepuisBlocs,
   type FicheBrute,
 } from "@/lib/prospection/fiche";
 
@@ -157,5 +160,52 @@ describe("pageMentionne", () => {
 
   it("ne confond pas un mot plus long avec le nom recherché", () => {
     expect(pageMentionne("<p>Une belle journée</p>", "BEL (LA VACHE QUI RIT)")).toBe(false);
+  });
+});
+
+describe("sourcesDepuisBlocs", () => {
+  it("reprend les liens des résultats de recherche et les passages cités, sans doublon", () => {
+    const s = sourcesDepuisBlocs([
+      { type: "server_tool_use" },
+      { type: "web_search_tool_result", content: [{ url: "https://a.example/x" }, { url: "https://b.example/y" }] },
+      {
+        type: "text",
+        text: "…",
+        citations: [
+          { url: "https://a.example/x", cited_text: "Leader du marché" },
+          { url: "https://c.example/z", cited_text: "Nouveau lancement" },
+        ],
+      },
+    ]);
+    expect(s.urls).toEqual(["https://a.example/x", "https://b.example/y", "https://c.example/z"]);
+    expect(s.extraits).toEqual([
+      { url: "https://a.example/x", texte: "Leader du marché" },
+      { url: "https://c.example/z", texte: "Nouveau lancement" },
+    ]);
+  });
+
+  it("ignore les blocs sans lien", () => {
+    expect(sourcesDepuisBlocs([{ type: "text", text: "sans citation", citations: null }])).toEqual({ urls: [], extraits: [] });
+  });
+});
+
+describe("extraireObjetJson", () => {
+  it("lit un objet JSON entouré de texte ou de balises", () => {
+    expect(extraireObjetJson('Voici :\n```json\n{"a": 1}\n```')).toEqual({ a: 1 });
+    expect(extraireObjetJson('{"a": {"b": 2}}')).toEqual({ a: { b: 2 } });
+  });
+
+  it("renvoie null sans objet valide", () => {
+    expect(extraireObjetJson("pas de json")).toBeNull();
+    expect(extraireObjetJson("{pas valide}")).toBeNull();
+  });
+});
+
+describe("ficheUtilisable", () => {
+  const base = { site_web: null, activite: "Fabricant", marques: [], enjeux: [], actualites: [], adresse_candidature: null, contacts_publics: [], postes_suggeres: [] };
+  it("exige une activité et au moins un fait sourcé", () => {
+    expect(ficheUtilisable(base)).toBe(false);
+    expect(ficheUtilisable({ ...base, marques: [{ texte: "M", source_url: "https://a.example" }] })).toBe(true);
+    expect(ficheUtilisable({ ...base, activite: " ", marques: [{ texte: "M", source_url: "https://a.example" }] })).toBe(false);
   });
 });

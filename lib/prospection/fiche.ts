@@ -177,3 +177,53 @@ export function pageMentionne(html: string, nomEntreprise: string): boolean {
     .replace(/[\u0300-\u036f]/g, "");
   return motsDuNom(nomEntreprise).some((mot) => new RegExp(`\\b${mot}\\b`).test(texte));
 }
+
+// --- Fiche établie par recherche web (site illisible) -----------------------------
+
+// Blocs de réponse d'une recherche web, réduits à ce dont on a besoin.
+export interface BlocRecherche {
+  type: string;
+  content?: unknown;
+  text?: string;
+  citations?: { url?: string; cited_text?: string }[] | null;
+}
+
+// Les liens réellement renvoyés par la recherche et les passages que Claude a cités à
+// partir d'eux : c'est tout ce qu'une fiche par recherche web a le droit de citer.
+export function sourcesDepuisBlocs(blocs: BlocRecherche[]): SourcesRecherche {
+  const urls: string[] = [];
+  const extraits: { url: string; texte: string }[] = [];
+  const ajouter = (url: string | undefined) => {
+    if (url && !urls.includes(url)) urls.push(url);
+  };
+
+  for (const bloc of blocs) {
+    if (bloc.type === "web_search_tool_result" && Array.isArray(bloc.content)) {
+      for (const r of bloc.content as { url?: string }[]) ajouter(r.url);
+    }
+    if (bloc.type === "text") {
+      for (const c of bloc.citations ?? []) {
+        ajouter(c.url);
+        if (c.url && c.cited_text) extraits.push({ url: c.url, texte: c.cited_text });
+      }
+    }
+  }
+  return { urls, extraits };
+}
+
+// Premier objet JSON d'un texte (le modèle l'entoure parfois d'une phrase ou de ```), ou null.
+export function extraireObjetJson(texte: string): unknown | null {
+  const debut = texte.indexOf("{");
+  const fin = texte.lastIndexOf("}");
+  if (debut === -1 || fin <= debut) return null;
+  try {
+    return JSON.parse(texte.slice(debut, fin + 1));
+  } catch {
+    return null;
+  }
+}
+
+// Une fiche vide (rien de sourcé) n'apporte rien : elle n'est pas enregistrée.
+export function ficheUtilisable(fiche: Fiche): boolean {
+  return fiche.activite.trim().length > 0 && fiche.marques.length + fiche.enjeux.length + fiche.actualites.length > 0;
+}

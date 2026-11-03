@@ -34,6 +34,12 @@ export default function FicheEntreprise({ fiche, onAjouterAdresse }: Props) {
   return (
     <div className="prospection-bloc" style={{ marginTop: 12, marginBottom: 0, background: "var(--paper)" }}>
       <h3>Fiche issue de sources publiques</h3>
+      {fiche.lecture === "recherche_web" && (
+        <p className="prospection-meta" style={{ margin: "0 0 8px" }}>
+          Le site de l&apos;entreprise refuse la lecture automatique : cette fiche vient d&apos;une recherche web. Chaque fait a son
+          lien, vérifie-le avant de t&apos;en servir. Aucun contact n&apos;a pu en être tiré.
+        </p>
+      )}
       <p style={{ margin: "0 0 10px", fontSize: 13.5 }}>
         {fiche.activite}
         {fiche.site_web && (
