@@ -156,3 +156,62 @@ export async function rechercherEntreprises(criteres: CriteresRecherche): Promis
 
   return { entreprises: gardees, pageSuivante: page <= totalPages ? page : null };
 }
+
+// --- Recherche par nom ou numéro SIREN (toutes activités) -------------------------
+// Pour les groupes que la recherche par secteur ne trouve pas : coopératives de
+// magasins, centrales d'achat classées en « agents de commerce » ou
+// « location »... La recherche par secteur ne connaît que des codes d'activité choisis.
+
+export type TermeRecherche = { type: "siren"; siren: string } | { type: "nom"; nom: string } | { erreur: string };
+
+// « 123 456 789 » ou un SIRET de 14 chiffres → le SIREN ; sinon un nom d'au moins 3 lettres.
+export function analyserTermeRecherche(saisie: string): TermeRecherche {
+  const texte = saisie.trim();
+  if (texte.length === 0) return { erreur: "Saisis un nom d'entreprise ou un numéro SIREN." };
+
+  const chiffres = texte.replace(/[\s.]/g, "");
+  if (/^\d+$/.test(chiffres)) {
+    if (chiffres.length === 9) return { type: "siren", siren: chiffres };
+    if (chiffres.length === 14) return { type: "siren", siren: chiffres.slice(0, 9) };
+    return { erreur: "Un numéro SIREN a 9 chiffres (ou 14 pour un SIRET)." };
+  }
+
+  const nom = texte.replace(/\s+/g, " ");
+  if (nom.length < 3) return { erreur: "Saisis au moins 3 lettres du nom." };
+  return { type: "nom", nom: nom.slice(0, 100) };
+}
+
+export interface CriteresParNom {
+  terme: string;
+  // Seuil d'effectif facultatif : sans lui, toutes les tailles sont proposées.
+  effectifMin?: string;
+  page?: number;
+}
+
+export function construireUrlParNom(criteres: CriteresParNom): string {
+  const analyse = analyserTermeRecherche(criteres.terme);
+  if ("erreur" in analyse) throw new Error(analyse.erreur);
+
+  const params = new URLSearchParams({
+    q: analyse.type === "siren" ? analyse.siren : analyse.nom,
+    etat_administratif: "A",
+    per_page: String(PAR_PAGE),
+    page: String(criteres.page ?? 1),
+  });
+  // Un nom de famille courant correspond surtout à des particuliers : on ne garde que les sociétés.
+  if (analyse.type === "nom") params.set("est_entrepreneur_individuel", "false");
+
+  const tranches = criteres.effectifMin ? tranchesAPartirDe(criteres.effectifMin) : [];
+  if (tranches.length > 0) params.set("tranche_effectif_salarie", tranches.join(","));
+
+  return `${SEARCH_URL}?${params.toString()}`;
+}
+
+export async function rechercherParNom(criteres: CriteresParNom): Promise<ResultatRecherche> {
+  const res = await fetch(construireUrlParNom(criteres), { headers: { Accept: "application/json" }, cache: "no-store" });
+  if (!res.ok) throw new Error(`Recherche d'entreprises indisponible (${res.status})`);
+
+  const resultat = normaliserReponse((await res.json()) as ReponseApi);
+  const page = criteres.page ?? 1;
+  return { entreprises: resultat.entreprises, pageSuivante: page < resultat.totalPages ? page + 1 : null };
+}

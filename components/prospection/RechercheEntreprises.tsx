@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   libelleTranche,
+  secteurPourNaf,
   SECTEURS_CIBLES,
   SEUILS_EFFECTIF,
   ZONES,
@@ -38,6 +39,13 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
   const [zoneId, setZoneId] = useState(ZONES[0].id);
   const [effectifMin, setEffectifMin] = useState("21");
   const [motCle, setMotCle] = useState("");
+  // « secteur » : recherche par codes d'activité. « nom » : par nom ou numéro SIREN, toutes activités
+  // (pour les groupes que le secteur ne retrouve pas : centrales d'achat, coopératives de magasins).
+  const [mode, setMode] = useState<"secteur" | "nom">("secteur");
+  const [terme, setTerme] = useState("");
+  const [effectifNom, setEffectifNom] = useState("");
+  // Secteur enregistré à l'import d'une recherche par nom : « auto » = d'après l'activité de l'entreprise.
+  const [secteurImport, setSecteurImport] = useState("auto");
   const [resultat, setResultat] = useState<Reponse | null>(null);
   const [selection, setSelection] = useState<Set<string>>(new Set());
   const [enCours, setEnCours] = useState(false);
@@ -53,13 +61,17 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
     setInfo(null);
     try {
       const zone = ZONES.find((z) => z.id === zoneId)!;
-      const params = new URLSearchParams({
-        secteur: secteurId,
-        departements: zone.departements.join(","),
-        effectif_min: effectifMin,
-        page: String(page),
-      });
-      if (motCle.trim()) params.set("q", motCle.trim());
+      const params =
+        mode === "nom"
+          ? new URLSearchParams({ mode: "nom", q: terme.trim(), page: String(page) })
+          : new URLSearchParams({
+              secteur: secteurId,
+              departements: zone.departements.join(","),
+              effectif_min: effectifMin,
+              page: String(page),
+            });
+      if (mode === "nom" && effectifNom) params.set("effectif_min", effectifNom);
+      if (mode === "secteur" && motCle.trim()) params.set("q", motCle.trim());
 
       const res = await fetch(`/api/prospection/entreprises/recherche?${params}`);
       const data = await res.json().catch(() => ({}));
@@ -90,6 +102,15 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
     });
   }
 
+  // Secteur enregistré avec l'entreprise : celui de la recherche, ou (recherche par nom) celui choisi,
+  // sinon celui déduit de son activité, sinon aucun.
+  function secteurEnregistre(codeNaf: string | null): string | null {
+    if (mode === "secteur") return secteur.libelle;
+    if (secteurImport === "aucun") return null;
+    if (secteurImport !== "auto") return SECTEURS_CIBLES.find((s) => s.id === secteurImport)?.libelle ?? null;
+    return secteurPourNaf(codeNaf)?.libelle ?? null;
+  }
+
   async function importer() {
     if (!resultat || selection.size === 0) return;
     setEnCours(true);
@@ -102,7 +123,7 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
           siren: e.siren,
           nom: e.nom,
           code_naf: e.code_naf,
-          secteur: secteur.libelle,
+          secteur: secteurEnregistre(e.code_naf),
           tranche_effectif: e.tranche_effectif,
           adresse: e.adresse,
           code_postal: e.code_postal,
@@ -137,6 +158,77 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
   return (
     <div className="prospection-bloc">
       <h3>Trouver de nouvelles entreprises</h3>
+      <div className="chip-row" style={{ marginBottom: 12 }}>
+        {(
+          [
+            ["secteur", "Par secteur"],
+            ["nom", "Par nom ou SIREN"],
+          ] as ["secteur" | "nom", string][]
+        ).map(([id, libelle]) => (
+          <button
+            key={id}
+            className={`chip${mode === id ? " active" : ""}`}
+            onClick={() => {
+              setMode(id);
+              setResultat(null);
+              setSelection(new Set());
+              setErreur(null);
+              setInfo(null);
+            }}
+          >
+            {libelle}
+          </button>
+        ))}
+      </div>
+
+      {mode === "nom" && (
+        <>
+          <p className="prospection-meta" style={{ marginBottom: 8 }}>
+            Cherche une entreprise précise, toutes activités et toutes zones : utile pour une centrale d&apos;achat ou un groupe que la
+            recherche par secteur ne retrouve pas (ex : le nom d&apos;une centrale d&apos;achat, ou son numéro SIREN si tu l&apos;as).
+          </p>
+          <div className="prospection-form">
+            <div className="filter-group">
+              <span className="filter-group-label">Nom ou numéro SIREN</span>
+              <input
+                type="text"
+                value={terme}
+                onChange={(e) => setTerme(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && terme.trim() && !enCours && rechercher(1)}
+                placeholder="ex : nom de la société, ou 123 456 789"
+              />
+            </div>
+            <div className="filter-group">
+              <span className="filter-group-label">Taille</span>
+              <select value={effectifNom} onChange={(e) => setEffectifNom(e.target.value)}>
+                <option value="">Toutes tailles</option>
+                {SEUILS_EFFECTIF.map((s) => (
+                  <option key={s.code} value={s.code}>
+                    {s.libelle}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="filter-group">
+              <span className="filter-group-label">Secteur à enregistrer</span>
+              <select value={secteurImport} onChange={(e) => setSecteurImport(e.target.value)}>
+                <option value="auto">D&apos;après l&apos;activité (sinon non précisé)</option>
+                {SECTEURS_CIBLES.filter((s) => s.id !== "sieges").map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.libelle}
+                  </option>
+                ))}
+                <option value="aucun">Non précisé</option>
+              </select>
+            </div>
+            <button className="action-btn primary" onClick={() => rechercher(1)} disabled={enCours || !terme.trim()}>
+              {enCours ? "Recherche..." : "Rechercher"}
+            </button>
+          </div>
+        </>
+      )}
+
+      {mode === "secteur" && (
       <div className="prospection-form">
         <div className="filter-group">
           <span className="filter-group-label">Secteur</span>
@@ -187,6 +279,7 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
           {enCours ? "Recherche..." : "Rechercher"}
         </button>
       </div>
+      )}
 
       {erreur && <p className="prospection-erreur" style={{ marginTop: 12 }}>{erreur}</p>}
       {info && <p className="prospection-info" style={{ marginTop: 12 }}>{info}</p>}
@@ -194,13 +287,16 @@ export default function RechercheEntreprises({ userId, onImportees }: Props) {
       {resultat && (
         <div style={{ marginTop: 16 }}>
           <p className="prospection-meta">
-            {resultat.entreprises.length} entreprise(s) dont le siège est dans la zone choisie. Source : base
-            Sirene (données publiques).
+            {mode === "nom"
+              ? `${resultat.entreprises.length} entreprise(s) trouvée(s), tous départements. Le siège est affiché pour chacune.`
+              : `${resultat.entreprises.length} entreprise(s) dont le siège est dans la zone choisie.`}{" "}
+            Source : base Sirene (données publiques).
           </p>
           {resultat.entreprises.length === 0 && (
             <p className="track-empty">
-              Aucune entreprise ne correspond{resultat.pageSuivante ? " dans cette tranche de résultats" : ""} — essaie
-              « Voir la suite », une autre zone ou une taille plus petite.
+              {mode === "nom"
+                ? "Aucune entreprise ne correspond : vérifie l'orthographe, essaie un nom plus court ou le numéro SIREN."
+                : `Aucune entreprise ne correspond${resultat.pageSuivante ? " dans cette tranche de résultats" : ""} — essaie « Voir la suite », une autre zone ou une taille plus petite.`}
             </p>
           )}
           <div className="prospection-liste" style={{ marginTop: 10 }}>

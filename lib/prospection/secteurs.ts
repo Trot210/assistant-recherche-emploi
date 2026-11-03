@@ -145,3 +145,10 @@ export const SEUILS_EFFECTIF = [
   { code: "22", libelle: "100 salariés et plus" },
   { code: "32", libelle: "250 salariés et plus" },
 ];
+
+// Secteur d'une entreprise d'après son code d'activité, ou null s'il n'en fait partie d'aucun :
+// une centrale d'achat classée en « agents de commerce » (46.17A) ne s'y trouve pas.
+export function secteurPourNaf(codeNaf: string | null | undefined): SecteurCible | null {
+  if (!codeNaf) return null;
+  return SECTEURS_CIBLES.find((s) => s.id !== "sieges" && s.codesNaf.includes(codeNaf)) ?? null;
+}

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { rechercherEntreprises } from "@/lib/prospection/recherche-entreprises";
+import { rechercherEntreprises, rechercherParNom, type ResultatRecherche } from "@/lib/prospection/recherche-entreprises";
 
 // Proxy de l'API publique Recherche d'entreprises : la recherche elle-même
 // ne coûte rien et ne touche pas à la base, mais elle reste réservée aux
@@ -18,23 +18,28 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  const parNom = searchParams.get("mode") === "nom";
   const secteurId = searchParams.get("secteur");
   const effectifMin = searchParams.get("effectif_min") ?? "12";
   const departements = (searchParams.get("departements") ?? "").split(",").filter(Boolean);
   const page = Number(searchParams.get("page") ?? "1");
 
-  if (!secteurId) {
+  if (!parNom && !secteurId) {
     return NextResponse.json({ error: "secteur est requis" }, { status: 400 });
   }
 
   try {
-    const resultat = await rechercherEntreprises({
-      secteurId,
-      departements,
-      effectifMin,
-      motCle: searchParams.get("q") ?? undefined,
-      page: Number.isInteger(page) && page > 0 ? page : 1,
-    });
+    const pageValide = Number.isInteger(page) && page > 0 ? page : 1;
+    // Par nom ou SIREN : toutes activités, toutes zones ; la taille est facultative.
+    const resultat: ResultatRecherche = parNom
+      ? await rechercherParNom({ terme: searchParams.get("q") ?? "", effectifMin: searchParams.get("effectif_min") ?? undefined, page: pageValide })
+      : await rechercherEntreprises({
+          secteurId: secteurId as string,
+          departements,
+          effectifMin,
+          motCle: searchParams.get("q") ?? undefined,
+          page: pageValide,
+        });
 
     const sirens = resultat.entreprises.map((e) => e.siren);
     const { data: existantes } = await supabase
@@ -53,7 +58,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Erreur lors de la recherche";
-    const status = /inconnu|mot-clé/.test(message) ? 400 : 502;
+    const status = /inconnu|mot-clé|SIREN|lettres|Saisis/.test(message) ? 400 : 502;
     return NextResponse.json({ error: message }, { status });
   }
 }
