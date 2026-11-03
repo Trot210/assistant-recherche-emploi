@@ -499,6 +499,38 @@ export interface Database {
           },
         ];
       };
+      courrier_candidatures: {
+        Row: {
+          id: string;
+          user_id: string;
+          message_id: string;
+          message_id_brut: string | null;
+          nature: "accuse_reception" | "refus" | "entretien" | "autre" | "non_lie";
+          expediteur: string;
+          sujet: string;
+          resume: string;
+          date_mail: string | null;
+          prospection_id: string | null;
+          deplace_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          message_id: string;
+          message_id_brut?: string | null;
+          nature: "accuse_reception" | "refus" | "entretien" | "autre" | "non_lie";
+          expediteur: string;
+          sujet?: string;
+          resume?: string;
+          date_mail?: string | null;
+          prospection_id?: string | null;
+          deplace_at?: string | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["courrier_candidatures"]["Insert"]>;
+        Relationships: [];
+      };
       reponses_detectees: {
         Row: {
           id: string;

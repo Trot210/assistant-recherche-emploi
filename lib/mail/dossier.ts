@@ -1,5 +1,7 @@
 import type { ImapFlow } from "imapflow";
-import { creerClientImap, imapConfigure } from "@/lib/mail/imap";
+import { simpleParser } from "mailparser";
+import { creerClientImap, imapConfigure, texteDepuisHtml } from "@/lib/mail/imap";
+import { estCandidatPossible, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
 import { normaliserIdMessage, listerIdsMessages, type ReponseBrute } from "@/lib/prospection/reponses";
 
 // Dossier (libellé Gmail) qui centralise la prospection : les messages envoyés y sont
@@ -74,7 +76,7 @@ async function copierEnvoyes(client: ImapFlow, dossier: string, ids: string[], b
 
 // Déplace dans le dossier les réponses reçues : retirées de la boîte de réception, ajoutées au
 // dossier. Une réponse déjà archivée est seulement ajoutée au dossier.
-async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier, reessais = 0) {
+async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier, reessais = 0, traites: string[] = []) {
   const archives: string[] = [];
 
   const verrouBoite = await client.getMailboxLock("INBOX");
@@ -94,6 +96,7 @@ async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], b
         }
         await client.messageMove(uids, dossier, { uid: true });
         bilan.deplaces += 1;
+        traites.push(id);
       } catch (e) {
         bilan.erreurs.push(e instanceof Error ? e.message : "déplacement impossible");
       }
@@ -117,6 +120,7 @@ async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], b
         }
         await client.messageCopy(uids, dossier, { uid: true });
         bilan.ajoutes += 1;
+        traites.push(id);
       } catch (e) {
         bilan.erreurs.push(e instanceof Error ? e.message : "ajout impossible");
       }
@@ -262,4 +266,131 @@ export async function classerRecapRecu(messageId: string): Promise<void> {
   } catch (e) {
     console.error("Classement du récapitulatif dans le dossier impossible:", e);
   }
+}
+
+// --- Mails de candidature de la boîte de réception ------------------------------
+
+export interface CourrierLu {
+  messageId: string;
+  messageIdBrut: string;
+  fromEmail: string;
+  fromNom: string | null;
+  sujet: string;
+  date: Date;
+  inReplyTo: string | null;
+  references: string[];
+  texte: string;
+}
+
+// Mails de candidature possibles arrivés en boîte de réception depuis `depuis` : un premier tri sur
+// l'expéditeur et l'objet (en-têtes seulement), puis lecture du contenu des plus récents, `max` au plus.
+// `dejaLus` : identifiants (normalisés) déjà classés, jamais relus. Lecture seule.
+export async function lireCandidatsBoite(params: {
+  // Boîte à lire : la boîte de réception (défaut) ou le dossier « Prospection » (réponses déjà rangées
+  // là, dont on veut seulement savoir si ce sont des refus).
+  boite?: "inbox" | "prospection";
+  depuis: Date;
+  adresseUtilisateur: string;
+  dejaLus: Set<string>;
+  max: number;
+}): Promise<{ lus: CourrierLu[]; restants: number }> {
+  const client = creerClientImap();
+  await client.connect();
+  const moi = params.adresseUtilisateur.trim().toLowerCase();
+  try {
+    const chemin = params.boite === "prospection" ? (await client.list()).find((b) => b.name === NOM_DOSSIER)?.path : "INBOX";
+    if (!chemin) return { lus: [], restants: 0 };
+    const verrou = await client.getMailboxLock(chemin, { readOnly: true });
+    try {
+      const uids = await client.search({ since: params.depuis }, { uid: true });
+      if (!uids || uids.length === 0) return { lus: [], restants: 0 };
+
+      const candidats: { uid: number; date: number }[] = [];
+      for await (const m of client.fetch(uids.slice(-1500), { uid: true, envelope: true }, { uid: true })) {
+        const id = normaliserIdMessage(m.envelope?.messageId);
+        const de = m.envelope?.from?.[0]?.address?.trim().toLowerCase();
+        if (!id || !de || de === moi || params.dejaLus.has(id)) continue;
+        if (!estCandidatPossible({ expediteur: de, sujet: m.envelope?.subject ?? "" })) continue;
+        candidats.push({ uid: m.uid, date: m.envelope?.date ? new Date(m.envelope.date).getTime() : 0 });
+      }
+      candidats.sort((a, b) => b.date - a.date);
+      const aLire = candidats.slice(0, params.max);
+
+      const lus: CourrierLu[] = [];
+      if (aLire.length > 0) {
+        for await (const m of client.fetch(aLire.map((c) => c.uid), { uid: true, source: { maxLength: 150_000 } }, { uid: true })) {
+          if (!m.source) continue;
+          const analyse = await simpleParser(m.source);
+          const idBrut = analyse.messageId?.trim();
+          const id = normaliserIdMessage(idBrut);
+          const de = analyse.from?.value[0];
+          if (!idBrut || !id || !de?.address) continue;
+          const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
+          lus.push({
+            messageId: id,
+            messageIdBrut: idBrut,
+            fromEmail: de.address.trim().toLowerCase(),
+            fromNom: de.name?.trim() || null,
+            sujet: analyse.subject ?? "",
+            date: analyse.date ?? new Date(),
+            inReplyTo: normaliserIdMessage(analyse.inReplyTo),
+            references: listerIdsMessages(analyse.references),
+            texte: brut.replace(/\s+/g, " ").trim().slice(0, 4000),
+          });
+        }
+      }
+      return { lus, restants: Math.max(0, candidats.length - aLire.length) };
+    } finally {
+      verrou.release();
+    }
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
+}
+
+// Range des mails de candidature dans les dossiers de l'utilisateur (« En attente réponse », « Refus »),
+// retirés de la boîte de réception ; ceux qui répondent à la prospection du site sont aussi ajoutés à
+// « Prospection ». Les dossiers de l'utilisateur ne sont jamais créés : s'il n'existe pas, on le dit.
+// Renvoie les identifiants réellement rangés.
+export async function rangerCourrier(
+  plan: { dossier: CleDossier; ids: string[]; aussiProspection: Set<string> }[],
+): Promise<{ ranges: string[]; bilan: BilanDossier }> {
+  const bilan: BilanDossier = { ...BILAN_VIDE, erreurs: [] };
+  const ranges: string[] = [];
+  const client = creerClientImap();
+  await client.connect();
+  try {
+    const boites = await client.list();
+    for (const etape of plan) {
+      if (etape.ids.length === 0) continue;
+      const chemin = trouverDossier(boites, etape.dossier);
+      if (!chemin) {
+        bilan.erreurs.push(`Dossier « ${etape.dossier === "refus" ? "Refus" : "En attente réponse"} » introuvable dans ta boîte mail`);
+        continue;
+      }
+      const traites: string[] = [];
+      await deplacerRecus(client, chemin, etape.ids, bilan, 0, traites);
+      ranges.push(...traites);
+
+      const aussi = traites.filter((id) => etape.aussiProspection.has(id));
+      if (aussi.length > 0) {
+        const { chemin: prospection } = await assurerDossier(client);
+        const tous = boites.find((b) => b.specialUse === "\\All")?.path;
+        if (tous) {
+          const verrou = await client.getMailboxLock(tous);
+          try {
+            for (const id of aussi) {
+              const uids = await trouver(client, id);
+              if (uids.length > 0) await client.messageCopy(uids, prospection, { uid: true });
+            }
+          } finally {
+            verrou.release();
+          }
+        }
+      }
+    }
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
+  return { ranges, bilan };
 }

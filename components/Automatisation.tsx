@@ -24,6 +24,32 @@ interface ResultatClassement {
   bilan: { dossierCree: boolean; copies: number; deplaces: number; ajoutes: number; introuvables: number; erreurs: string[] } | null;
 }
 
+interface LigneCourrier {
+  expediteur: string;
+  sujet: string;
+  nature: "accuse_reception" | "refus" | "entretien" | "autre" | "non_lie";
+  resume: string;
+  date: string | null;
+  prospection: boolean;
+}
+
+interface ResultatCourrier {
+  action: "analyser" | "ranger";
+  lignes?: LigneCourrier[];
+  restants?: number;
+  aRanger?: { attente: number; refus: number };
+  ranges?: number;
+  bilan?: { erreurs: string[] } | null;
+}
+
+const LIBELLE_NATURE_COURRIER: Record<LigneCourrier["nature"], string> = {
+  accuse_reception: "Accusé de réception → En attente",
+  refus: "Refus → Refus",
+  entretien: "Invitation à échanger (reste en boîte de réception)",
+  autre: "Autre (reste en boîte de réception)",
+  non_lie: "Sans rapport (reste en boîte de réception)",
+};
+
 interface Apercu {
   nb_actions: number;
   nouvelles_reponses: number;
@@ -41,6 +67,11 @@ export default function Automatisation() {
   const [classement, setClassement] = useState<ResultatClassement | null>(null);
   const [classementEnCours, setClassementEnCours] = useState(false);
   const [erreurClassement, setErreurClassement] = useState<string | null>(null);
+  // Tri des mails de candidature : lecture (analyser), puis rangement.
+  const [courrier, setCourrier] = useState<ResultatCourrier | null>(null);
+  const [courrierEnCours, setCourrierEnCours] = useState(false);
+  const [erreurCourrier, setErreurCourrier] = useState<string | null>(null);
+  const [lignesCourrier, setLignesCourrier] = useState<LigneCourrier[]>([]);
 
   const charger = useCallback(async () => {
     const res = await fetch("/api/quotas").catch(() => null);
@@ -101,6 +132,27 @@ export default function Automatisation() {
       setErreurClassement(e instanceof Error ? e.message : "Erreur");
     } finally {
       setClassementEnCours(false);
+    }
+  }
+
+  async function trierCourrier(action: "analyser" | "ranger") {
+    setCourrierEnCours(true);
+    setErreurCourrier(null);
+    try {
+      const res = await fetch("/api/prospection/courrier", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Erreur");
+      const r = data as ResultatCourrier;
+      if (action === "analyser") setLignesCourrier((avant) => [...(r.lignes ?? []), ...avant]);
+      setCourrier((avant) => (action === "ranger" && avant ? { ...avant, ...r, lignes: avant.lignes } : r));
+    } catch (e) {
+      setErreurCourrier(e instanceof Error ? e.message : "Erreur");
+    } finally {
+      setCourrierEnCours(false);
     }
   }
 
@@ -177,6 +229,44 @@ export default function Automatisation() {
               </ul>
             )}
           </div>
+        )}
+      </div>
+      <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
+        <h3 style={{ marginBottom: 6 }}>Mails de candidature : « En attente réponse » et « Refus »</h3>
+        <p className="prospection-meta" style={{ marginBottom: 8 }}>
+          Le site lit les mails de candidature reçus à partir du 3 novembre 2026 (les plus anciens ne sont pas touchés), jusqu&apos;à 25 par clic, environ 0,5 centime chacun. Un accusé de
+          réception va dans « En attente réponse », un refus va dans « Refus » ; une invitation à échanger reste en boîte de réception, pour que
+          tu la voies. Tu vois d&apos;abord ce qui a été lu, puis tu choisis de ranger. Rien n&apos;est supprimé.
+        </p>
+        <div className="prospection-actions">
+          <button className="action-btn" onClick={() => trierCourrier("analyser")} disabled={courrierEnCours}>
+            {courrierEnCours ? "Lecture en cours..." : courrier ? "Lire la suite" : "Lire mes mails de candidature"}
+          </button>
+          {courrier?.aRanger && courrier.aRanger.attente + courrier.aRanger.refus > 0 && (
+            <button className="action-btn primary" onClick={() => trierCourrier("ranger")} disabled={courrierEnCours}>
+              Ranger ({courrier.aRanger.attente} en attente, {courrier.aRanger.refus} refus)
+            </button>
+          )}
+        </div>
+        {erreurCourrier && <p className="prospection-erreur" style={{ marginTop: 8 }}>{erreurCourrier}</p>}
+        {courrier?.action === "ranger" && (
+          <p className="prospection-info" style={{ marginTop: 8 }}>
+            {courrier.ranges ?? 0} mail(s) rangé(s).
+            {courrier.bilan && courrier.bilan.erreurs.length > 0 ? ` Erreurs : ${[...new Set(courrier.bilan.erreurs)].slice(0, 2).join(" ; ")}` : ""}
+          </p>
+        )}
+        {courrier && typeof courrier.restants === "number" && courrier.restants > 0 && (
+          <p className="prospection-meta" style={{ marginTop: 8 }}>Il en reste à lire : clique sur « Lire la suite ».</p>
+        )}
+        {lignesCourrier.length > 0 && (
+          <ul style={{ margin: "8px 0 0 18px" }}>
+            {lignesCourrier.slice(0, 40).map((l, i) => (
+              <li key={i} className="prospection-meta">
+                <b>{l.expediteur}</b> — {l.sujet.slice(0, 60)} · {LIBELLE_NATURE_COURRIER[l.nature]}
+                {l.prospection ? " · réponse à ta prospection" : ""}
+              </li>
+            ))}
+          </ul>
         )}
       </div>
       {apercu && (

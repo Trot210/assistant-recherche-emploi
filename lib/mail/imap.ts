@@ -31,7 +31,7 @@ export class ImapNonConfigure extends Error {
 }
 
 // Un message dont seul le HTML existe : on en tire un texte brut sommaire.
-function texteDepuisHtml(html: string): string {
+export function texteDepuisHtml(html: string): string {
   return html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
     .replace(/<br\s*\/?>|<\/(p|div|li|tr)>/gi, "\n")
