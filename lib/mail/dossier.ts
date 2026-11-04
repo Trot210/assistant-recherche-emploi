@@ -1,6 +1,7 @@
 import type { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { creerClientImap, imapConfigure, texteDepuisHtml } from "@/lib/mail/imap";
+import { debutDesAlertes, estAlerteEmploi, trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
 import { estCandidatPossible, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
 import { normaliserIdMessage, listerIdsMessages, type ReponseBrute } from "@/lib/prospection/reponses";
 
@@ -393,4 +394,50 @@ export async function rangerCourrier(
     await client.logout().catch(() => undefined);
   }
   return { ranges, bilan };
+}
+
+// --- Alertes des sites d'annonces ------------------------------------------------
+
+export interface BilanAlertes {
+  trouvees: number;
+  rangees: number;
+  erreurs: string[];
+}
+
+// Range dans le dossier « Alertes emploi » les alertes des sites d'annonces arrivées en boîte de réception
+// depuis `jours` jours (jamais avant la date de début décidée avec l'utilisateur). Aucun appel à Claude :
+// l'expéditeur et l'objet suffisent. Le dossier est celui de l'utilisateur, jamais créé ici.
+export async function rangerAlertesEmploi(params: { jours: number }): Promise<BilanAlertes> {
+  const bilan: BilanAlertes = { trouvees: 0, rangees: 0, erreurs: [] };
+  const client = creerClientImap();
+  await client.connect();
+  try {
+    const chemin = trouverDossierAlertes(await client.list());
+    if (!chemin) {
+      bilan.erreurs.push("Dossier « Alertes emploi » introuvable dans ta boîte mail");
+      return bilan;
+    }
+    const verrou = await client.getMailboxLock("INBOX");
+    try {
+      const uids = await client.search({ since: debutDesAlertes(params.jours) }, { uid: true });
+      if (!uids || uids.length === 0) return bilan;
+      const aRanger: number[] = [];
+      for await (const m of client.fetch(uids.slice(-1000), { uid: true, envelope: true }, { uid: true })) {
+        const de = m.envelope?.from?.[0]?.address;
+        if (de && estAlerteEmploi({ expediteur: de, sujet: m.envelope?.subject ?? "" })) aRanger.push(m.uid);
+      }
+      bilan.trouvees = aRanger.length;
+      if (aRanger.length > 0) {
+        await client.messageMove(aRanger, chemin, { uid: true });
+        bilan.rangees = aRanger.length;
+      }
+    } finally {
+      verrou.release();
+    }
+  } catch (e) {
+    bilan.erreurs.push(e instanceof Error ? e.message : "rangement impossible");
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
+  return bilan;
 }
