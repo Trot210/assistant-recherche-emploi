@@ -304,7 +304,7 @@ export default function Automatisation() {
         )}
       </div>
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-        <h3 style={{ marginBottom: 6 }}>Nettoyage des dossiers « Refus » et « En attente réponse »</h3>
+        <h3 style={{ marginBottom: 6 }}>Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi »</h3>
         <p className="prospection-meta" style={{ marginBottom: 8 }}>
           Un mail reçu il y a plus de 30 jours est mis à la corbeille de ta boîte mail, une fois par jour : tu peux l&apos;y récupérer, et ce site
           n&apos;efface rien définitivement ni ne vide la corbeille (Gmail l&apos;efface lui-même après 30 jours de plus). Un mail aussi rangé dans

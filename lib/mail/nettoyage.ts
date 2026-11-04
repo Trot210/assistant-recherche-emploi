@@ -1,14 +1,15 @@
 import { creerClientImap } from "@/lib/mail/imap";
 import { NOM_DOSSIER } from "@/lib/mail/dossier";
-import { trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
+import { trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
+import { trouverDossier } from "@/lib/prospection/courrier-candidatures";
 import { actionDeNettoyage, dateLimiteNettoyage, type ActionNettoyage } from "@/lib/prospection/nettoyage";
 import { normaliserIdMessage } from "@/lib/prospection/reponses";
 
-// Nettoyage des dossiers « Refus » et « En attente réponse » : les mails reçus il y a plus de 30 jours
+// Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi » : les mails reçus il y a plus de 30 jours
 // sont mis à la CORBEILLE de Gmail (récupérables ; Gmail les efface lui-même définitivement après
 // 30 jours de plus). Ce code n'efface jamais rien définitivement et ne vide jamais la corbeille.
 // Un mail aussi rangé dans « Prospection » est seulement retiré du dossier, pour rester dans
-// « Prospection ». Seuls ces deux dossiers sont touchés : jamais la boîte de réception ni les envoyés.
+// « Prospection ». Seuls ces trois dossiers sont touchés : jamais la boîte de réception ni les envoyés.
 
 const MAX_PAR_PASSAGE = 100;
 
@@ -56,8 +57,12 @@ export async function nettoyerDossiers(options: { jours: number; apercu: boolean
     }
 
     let restant = MAX_PAR_PASSAGE;
-    for (const cle of ["attente", "refus"] as CleDossier[]) {
-      const chemin = trouverDossier(boites, cle);
+    const dossiers: { libelle: string; chemin: string | null }[] = [
+      { libelle: "En attente réponse", chemin: trouverDossier(boites, "attente") },
+      { libelle: "Refus", chemin: trouverDossier(boites, "refus") },
+      { libelle: "Alertes emploi", chemin: trouverDossierAlertes(boites) },
+    ];
+    for (const { libelle, chemin } of dossiers) {
       if (!chemin || restant <= 0) continue;
 
       const verrou = await client.getMailboxLock(chemin, { readOnly: options.apercu });
@@ -71,7 +76,7 @@ export async function nettoyerDossiers(options: { jours: number; apercu: boolean
           const action = actionDeNettoyage(normaliserIdMessage(m.envelope?.messageId), dansProspection);
           (action === "retirer" ? aRetirer : aCorbeille).push(m.uid);
           bilan.lignes.push({
-            dossier: cle === "refus" ? "Refus" : "En attente réponse",
+            dossier: libelle,
             action,
             expediteur: m.envelope?.from?.[0]?.address ?? "?",
             sujet: m.envelope?.subject ?? "",

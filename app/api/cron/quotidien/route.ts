@@ -214,7 +214,7 @@ export async function POST(request: Request) {
     );
   }
 
-  // Nettoyage des dossiers « Refus » et « En attente réponse » (mails de plus de 30 jours, mis à la
+  // Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi » (mails de plus de 30 jours, mis à la
   // corbeille de la boîte mail). Seulement si le réglage est lisible ET actif : sans lui, rien n'est supprimé.
   if (!simulation && dossierDisponible()) {
     const { data: nettoyage, error: nettoyageError } = await supabase.from("reglages").select("purge_dossiers").eq("user_id", userId).maybeSingle();

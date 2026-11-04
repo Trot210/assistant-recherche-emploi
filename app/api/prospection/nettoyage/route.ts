@@ -6,7 +6,7 @@ import { JOURS_AVANT_NETTOYAGE } from "@/lib/prospection/nettoyage";
 
 export const maxDuration = 60;
 
-// Nettoyage des dossiers « Refus » et « En attente réponse » : les mails reçus il y a plus de 30 jours
+// Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi » : les mails reçus il y a plus de 30 jours
 // vont à la corbeille de la boîte mail (récupérables ; rien n'est effacé définitivement). `apercu: true`
 // dit seulement ce qui serait nettoyé, sans toucher à rien.
 export async function POST(request: Request) {
