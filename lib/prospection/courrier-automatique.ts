@@ -1,4 +1,5 @@
 import { debutDesAlertes, estAlerteEmploi } from "@/lib/prospection/alertes-emploi";
+import { estCandidatPossible } from "@/lib/prospection/courrier-candidatures";
 
 // Rangement automatique, sans Claude, de trois sortes de mails de la boîte de réception : les alertes des
 // sites d'annonces (« Alertes emploi »), les mails à durée de vie courte (« Mails temporaires ») et les lettres
@@ -26,10 +27,17 @@ export function estMailTemporaire(params: { expediteur: string; sujet: string })
   return SUJET_TEMPORAIRE.test(params.sujet) && !SUJET_CANDIDATURE_OU_TRANSACTION.test(params.sujet);
 }
 
+// Étapes d'un recrutement annoncées par un site d'évaluation ou de recrutement : « Votre prochaine étape pour… »,
+// « Merci d'avoir complété votre évaluation ».
+const SUJET_RECRUTEMENT = /prochaine [ée]tape|[ée]valuation|assessment|test (en ligne|d['’])|votre profil/i;
+
 // Une lettre d'information porte un lien de désinscription ; elle ne parle ni d'une candidature, ni d'une
-// facture, ni de la sécurité d'un compte.
+// facture, ni de la sécurité d'un compte. Un mail d'une plateforme de recrutement (ou qui annonce une étape de
+// recrutement) n'en est jamais une, même avec un lien de désinscription : il va au tri des candidatures.
 export function estLettreInformation(params: { expediteur: string; sujet: string; listeDesinscription: boolean }): boolean {
-  return params.listeDesinscription && !SUJET_A_GARDER.test(params.sujet);
+  if (!params.listeDesinscription || SUJET_A_GARDER.test(params.sujet)) return false;
+  if (SUJET_RECRUTEMENT.test(params.sujet)) return false;
+  return !estCandidatPossible({ expediteur: params.expediteur, sujet: params.sujet });
 }
 
 // Première catégorie qui s'applique, dans cet ordre : alerte emploi, mail temporaire, lettre d'information.

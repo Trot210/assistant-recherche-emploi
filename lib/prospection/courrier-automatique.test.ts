@@ -50,6 +50,25 @@ describe("estLettreInformation", () => {
   });
 });
 
+describe("estLettreInformation : recrutement", () => {
+  it("ne range pas en lettre d'information un mail d'une plateforme de recrutement ou d'évaluation", () => {
+    for (const [expediteur, sujet] of [
+      ["noreply@assessfirst.com", "Votre prochaine étape pour « Chef de produit » chez Société X"],
+      ["noreply@assessfirst.com", "Merci d'avoir complété votre évaluation pour Société X"],
+      ["noreply@assessfirst.com", "Vous avez partagé votre profil avec Société X"],
+      ["no-reply@teamtailor-mail.com", "Nous aimerions vous garder dans notre bassin de talents"],
+      ["x@y.example", "Invitation à l'évaluation en ligne"],
+    ]) {
+      expect(estLettreInformation({ expediteur, sujet, listeDesinscription: true }), `${expediteur} ${sujet}`).toBe(false);
+    }
+  });
+
+  it("range toujours les vraies lettres d'information", () => {
+    expect(estLettreInformation({ expediteur: "noreply@email.exemple.example", sujet: "4 nouveaux styles à essayer", listeDesinscription: true })).toBe(true);
+    expect(estLettreInformation({ expediteur: "google-maps-noreply@exemple.example", sujet: "Votre avis a été vu 100 fois", listeDesinscription: true })).toBe(true);
+  });
+});
+
 describe("categorieAutomatique", () => {
   const base = { expediteur: "x@y.example", listeDesinscription: false };
 

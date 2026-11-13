@@ -44,7 +44,7 @@ export function trouverDossier(boites: { path: string; name: string }[], cle: Cl
 
 // Plateformes de recrutement dont les mails sont des mails de candidature.
 const EXPEDITEURS_ATS =
-  /(myworkday|workday|smartrecruiters|icims|taleo|greenhouse|lever\.co|workable|recruitee|teamtailor|successfactors|jobvite|bamboohr|ashbyhq|pinpointhq|welcomekit|welcometothejungle|jobteaser|marvinrecruiter|cornerjob|hellowork|apec|francetravail|talent\.|recrutement|recruiting|careers|carrieres|candidature|hiring|jobs@|noreply@.*(rh|hr))/i;
+  /(myworkday|workday|assessfirst|smartrecruiters|icims|taleo|greenhouse|lever\.co|workable|recruitee|teamtailor|successfactors|jobvite|bamboohr|ashbyhq|pinpointhq|welcomekit|welcometothejungle|jobteaser|marvinrecruiter|cornerjob|hellowork|apec|francetravail|talent\.|recrutement|recruiting|careers|carrieres|candidature|hiring|jobs@|noreply@.*(rh|hr))/i;
 
 const SUJET_CANDIDATURE =
   /candidature|postul|application|applied|appliquer|recrutement|entretien|interview|votre profil|offre d.emploi|nous avons bien re[cç]u|thank you for applying|merci pour votre int[eé]r[eê]t|suite à votre|suite a votre|your candidacy|poste de|position of/i;
