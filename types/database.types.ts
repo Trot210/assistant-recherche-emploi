@@ -512,6 +512,10 @@ export interface Database {
           date_mail: string | null;
           prospection_id: string | null;
           deplace_at: string | null;
+          action_requise: boolean;
+          action_texte: string | null;
+          action_lien: string | null;
+          action_faite_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -526,6 +530,10 @@ export interface Database {
           date_mail?: string | null;
           prospection_id?: string | null;
           deplace_at?: string | null;
+          action_requise?: boolean;
+          action_texte?: string | null;
+          action_lien?: string | null;
+          action_faite_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["courrier_candidatures"]["Insert"]>;

@@ -12,6 +12,7 @@ import { formaterProgrammation } from "@/lib/prospection/planification";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
 import Automatisation from "@/components/Automatisation";
 import CoutClaude from "@/components/CoutClaude";
+import MailsAFaire from "@/components/MailsAFaire";
 import ReponsesPanel from "@/components/prospection/ReponsesPanel";
 
 const JOURS_NOUVELLES_OFFRES = 3;
@@ -127,6 +128,8 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
       {chargement && <p className="prospection-meta">Chargement...</p>}
       {rien && <p className="track-empty">Rien d&apos;urgent aujourd&apos;hui.</p>}
+
+      <MailsAFaire />
 
       {aValider.length > 0 && (
         <div className="prospection-bloc">

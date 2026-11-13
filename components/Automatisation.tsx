@@ -42,13 +42,14 @@ interface LigneCourrier {
   resume: string;
   date: string | null;
   prospection: boolean;
+  action?: string | null;
 }
 
 interface ResultatCourrier {
   action: "analyser" | "ranger";
   lignes?: LigneCourrier[];
   restants?: number;
-  aRanger?: { attente: number; refus: number };
+  aRanger?: { attente: number; refus: number; entretiens: number };
   ranges?: number;
   bilan?: { erreurs: string[] } | null;
 }
@@ -56,7 +57,7 @@ interface ResultatCourrier {
 const LIBELLE_NATURE_COURRIER: Record<LigneCourrier["nature"], string> = {
   accuse_reception: "Accusé de réception → En attente",
   refus: "Refus → Refus",
-  entretien: "Invitation à échanger (reste en boîte de réception)",
+  entretien: "Invitation à un entretien → Entretiens (étoilé)",
   autre: "Autre (reste en boîte de réception)",
   non_lie: "Sans rapport (reste en boîte de réception)",
 };
@@ -269,16 +270,16 @@ export default function Automatisation() {
         <h3 style={{ marginBottom: 6 }}>Mails de candidature : « En attente réponse » et « Refus »</h3>
         <p className="prospection-meta" style={{ marginBottom: 8 }}>
           Le site lit les mails de candidature reçus à partir du 3 novembre 2026 (les plus anciens ne sont pas touchés), jusqu&apos;à 25 par clic, environ 0,5 centime chacun. Un accusé de
-          réception va dans « En attente réponse », un refus va dans « Refus » ; une invitation à échanger reste en boîte de réception, pour que
-          tu la voies. Tu vois d&apos;abord ce qui a été lu, puis tu choisis de ranger. Rien n&apos;est supprimé.
+          réception va dans « En attente réponse », un refus va dans « Refus » ; une invitation à un entretien va dans « Entretiens », avec une étoile. Un mail qui te demande
+          quelque chose (finaliser une candidature, envoyer un document) reste en boîte de réception et apparaît dans « À faire dans mes mails ». Tu vois d&apos;abord ce qui a été lu, puis tu choisis de ranger. Rien n&apos;est supprimé.
         </p>
         <div className="prospection-actions">
           <button className="action-btn" onClick={() => trierCourrier("analyser")} disabled={courrierEnCours}>
             {courrierEnCours ? "Lecture en cours..." : courrier ? "Lire la suite" : "Lire mes mails de candidature"}
           </button>
-          {courrier?.aRanger && courrier.aRanger.attente + courrier.aRanger.refus > 0 && (
+          {courrier?.aRanger && courrier.aRanger.attente + courrier.aRanger.refus + courrier.aRanger.entretiens > 0 && (
             <button className="action-btn primary" onClick={() => trierCourrier("ranger")} disabled={courrierEnCours}>
-              Ranger ({courrier.aRanger.attente} en attente, {courrier.aRanger.refus} refus)
+              Ranger ({courrier.aRanger.attente} en attente, {courrier.aRanger.refus} refus, {courrier.aRanger.entretiens} entretien(s))
             </button>
           )}
         </div>

@@ -11,7 +11,8 @@ import {
   trouverDossierTemporaires,
   type CategorieAutomatique,
 } from "@/lib/prospection/courrier-automatique";
-import { estCandidatPossible, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
+import { type LettreLue } from "@/lib/prospection/lettres-information";
+import { estCandidatPossible, NOM_PAR_DOSSIER, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
 import { normaliserIdMessage, listerIdsMessages, type ReponseBrute } from "@/lib/prospection/reponses";
 
 // Dossier (libellé Gmail) qui centralise la prospection : les messages envoyés y sont
@@ -86,7 +87,7 @@ async function copierEnvoyes(client: ImapFlow, dossier: string, ids: string[], b
 
 // Déplace dans le dossier les réponses reçues : retirées de la boîte de réception, ajoutées au
 // dossier. Une réponse déjà archivée est seulement ajoutée au dossier.
-async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier, reessais = 0, traites: string[] = []) {
+async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], bilan: BilanDossier, reessais = 0, traites: string[] = [], etoile = false) {
   const archives: string[] = [];
 
   const verrouBoite = await client.getMailboxLock("INBOX");
@@ -104,6 +105,8 @@ async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], b
           archives.push(id);
           continue;
         }
+        // L'étoile Gmail est le drapeau \Flagged ; posée avant le déplacement, elle suit le message.
+        if (etoile) await client.messageFlagsAdd(uids, ["\\Flagged"], { uid: true }).catch(() => undefined);
         await client.messageMove(uids, dossier, { uid: true });
         bilan.deplaces += 1;
         traites.push(id);
@@ -128,6 +131,7 @@ async function deplacerRecus(client: ImapFlow, dossier: string, ids: string[], b
           bilan.introuvables += 1;
           continue;
         }
+        if (etoile) await client.messageFlagsAdd(uids, ["\\Flagged"], { uid: true }).catch(() => undefined);
         await client.messageCopy(uids, dossier, { uid: true });
         bilan.ajoutes += 1;
         traites.push(id);
@@ -367,7 +371,7 @@ export async function lireCandidatsBoite(params: {
 // « Prospection ». Les dossiers de l'utilisateur ne sont jamais créés : s'il n'existe pas, on le dit.
 // Renvoie les identifiants réellement rangés.
 export async function rangerCourrier(
-  plan: { dossier: CleDossier; ids: string[]; aussiProspection: Set<string> }[],
+  plan: { dossier: CleDossier; ids: string[]; aussiProspection: Set<string>; etoile?: boolean }[],
 ): Promise<{ ranges: string[]; bilan: BilanDossier }> {
   const bilan: BilanDossier = { ...BILAN_VIDE, erreurs: [] };
   const ranges: string[] = [];
@@ -379,11 +383,11 @@ export async function rangerCourrier(
       if (etape.ids.length === 0) continue;
       const chemin = trouverDossier(boites, etape.dossier);
       if (!chemin) {
-        bilan.erreurs.push(`Dossier « ${etape.dossier === "refus" ? "Refus" : "En attente réponse"} » introuvable dans ta boîte mail`);
+        bilan.erreurs.push(`Dossier « ${NOM_PAR_DOSSIER[etape.dossier]} » introuvable dans ta boîte mail`);
         continue;
       }
       const traites: string[] = [];
-      await deplacerRecus(client, chemin, etape.ids, bilan, 0, traites);
+      await deplacerRecus(client, chemin, etape.ids, bilan, 0, traites, etape.etoile ?? false);
       ranges.push(...traites);
 
       const aussi = traites.filter((id) => etape.aussiProspection.has(id));
@@ -480,6 +484,35 @@ export async function rangerCourrierAutomatique(params: { jours: number }): Prom
     await client.logout().catch(() => undefined);
   }
   return bilan;
+}
+
+// Lettres d'information reçues depuis `jours` jours et rangées dans « Lettres d'information » : expéditeur et en-tête de
+// désinscription, pour le bilan du lundi. Lecture seule ; renvoie une liste vide si le dossier n'existe pas.
+export async function lireLettresRecentes(params: { jours: number }): Promise<LettreLue[]> {
+  const client = creerClientImap();
+  await client.connect();
+  try {
+    const chemin = trouverDossierLettres(await client.list());
+    if (!chemin) return [];
+    const verrou = await client.getMailboxLock(chemin, { readOnly: true });
+    try {
+      const depuis = new Date(Date.now() - params.jours * 86_400_000);
+      const uids = await client.search({ since: depuis }, { uid: true });
+      if (!uids || uids.length === 0) return [];
+      const lettres: LettreLue[] = [];
+      for await (const m of client.fetch(uids.slice(-500), { uid: true, envelope: true, headers: ["list-unsubscribe"] }, { uid: true })) {
+        const de = m.envelope?.from?.[0];
+        const recu = m.envelope?.date ? new Date(m.envelope.date).getTime() : 0;
+        if (!de?.address || recu < depuis.getTime()) continue;
+        lettres.push({ adresse: de.address, nom: de.name?.trim() || null, enteteDesinscription: m.headers?.toString() ?? "" });
+      }
+      return lettres;
+    } finally {
+      verrou.release();
+    }
+  } finally {
+    await client.logout().catch(() => undefined);
+  }
 }
 
 const NOM_PAR_CATEGORIE: Record<CategorieAutomatique, string> = {

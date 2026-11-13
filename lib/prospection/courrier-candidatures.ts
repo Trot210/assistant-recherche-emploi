@@ -1,5 +1,5 @@
 // Tri des mails de candidature de la boîte de réception : accusés de réception → « En attente
-// réponse », refus → « Refus ». Tout ce fichier est du calcul pur ; la lecture de la boîte mail
+// réponse », refus → « Refus », invitations à un entretien → « Entretiens » (avec une étoile). Tout ce fichier est du calcul pur ; la lecture de la boîte mail
 // (lib/mail/dossier.ts) et la lecture du contenu par Claude (lib/anthropic/courrier-candidature.ts)
 // sont ailleurs.
 
@@ -14,17 +14,25 @@ export const LIBELLE_NATURE: Record<NatureCourrier, string> = {
   non_lie: "Sans rapport avec une candidature",
 };
 
-// Dossiers de l'utilisateur : « En attente réponse » et « Refus ». Leurs noms portent des emojis
-// et des accents que Gmail peut écrire de plusieurs façons : on les retrouve par leur mot-clé.
-export type CleDossier = "attente" | "refus";
+// Dossiers de l'utilisateur : « En attente réponse », « Refus » et « Entretiens ». Leurs noms portent des
+// emojis et des accents que Gmail peut écrire de plusieurs façons : on les retrouve par leur mot-clé.
+export type CleDossier = "attente" | "refus" | "entretiens";
 
-const MOTS_DOSSIER: Record<CleDossier, RegExp> = { attente: /attente/i, refus: /refus/i };
+const MOTS_DOSSIER: Record<CleDossier, RegExp> = { attente: /attente/i, refus: /refus/i, entretiens: /entretien/i };
+
+export const NOM_PAR_DOSSIER: Record<CleDossier, string> = { attente: "En attente réponse", refus: "Refus", entretiens: "Entretiens" };
 
 export function dossierPourNature(nature: NatureCourrier): CleDossier | null {
   if (nature === "accuse_reception") return "attente";
   if (nature === "refus") return "refus";
-  // Une invitation à échanger reste en boîte de réception : c'est la bonne nouvelle à voir.
+  // Une invitation à un entretien va dans « Entretiens », marquée d'une étoile pour rester repérable.
+  if (nature === "entretien") return "entretiens";
   return null;
+}
+
+// Seuls les mails d'entretien sont étoilés en les rangeant (le dossier « Entretiens » n'est jamais nettoyé).
+export function dossierMarqueEtoile(dossier: CleDossier): boolean {
+  return dossier === "entretiens";
 }
 
 export function trouverDossier(boites: { path: string; name: string }[], cle: CleDossier): string | null {
@@ -59,14 +67,22 @@ export interface CourrierARanger {
   liaison: boolean;
 }
 
-// Ce qui reste à ranger : classé comme accusé ou refus, pas encore déplacé.
+// Ce qui reste à ranger : classé comme accusé, refus ou invitation à un entretien, pas encore déplacé.
 export function courrierARanger(
-  lignes: { message_id_brut: string | null; nature: NatureCourrier; deplace_at: string | null; prospection_id: string | null }[],
+  lignes: {
+    message_id_brut: string | null;
+    nature: NatureCourrier;
+    deplace_at: string | null;
+    prospection_id: string | null;
+    // Le mail demande quelque chose au candidat et ce n'est pas encore fait : il reste en boîte de réception.
+    action_en_attente?: boolean;
+  }[],
 ): CourrierARanger[] {
   const aRanger: CourrierARanger[] = [];
   for (const l of lignes) {
     const dossier = dossierPourNature(l.nature);
     if (!dossier || l.deplace_at !== null || !l.message_id_brut) continue;
+    if (l.action_en_attente && dossier !== "entretiens") continue;
     aRanger.push({ messageIdBrut: l.message_id_brut, nature: l.nature, dossier, liaison: l.prospection_id !== null });
   }
   return aRanger;

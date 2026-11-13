@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { courrierARanger, debutDuTri, dossierPourNature, estCandidatPossible, TRI_DEPUIS, trouverDossier } from "./courrier-candidatures";
+import { courrierARanger, debutDuTri, dossierMarqueEtoile, dossierPourNature, estCandidatPossible, TRI_DEPUIS, trouverDossier } from "./courrier-candidatures";
 
 describe("estCandidatPossible", () => {
   it("retient les mails dont l'objet parle d'une candidature", () => {
@@ -21,10 +21,10 @@ describe("estCandidatPossible", () => {
 });
 
 describe("dossierPourNature", () => {
-  it("accusé → attente, refus → refus, le reste reste en boîte de réception", () => {
+  it("accusé → attente, refus → refus, entretien → entretiens, le reste reste en boîte de réception", () => {
     expect(dossierPourNature("accuse_reception")).toBe("attente");
     expect(dossierPourNature("refus")).toBe("refus");
-    expect(dossierPourNature("entretien")).toBeNull();
+    expect(dossierPourNature("entretien")).toBe("entretiens");
     expect(dossierPourNature("autre")).toBeNull();
     expect(dossierPourNature("non_lie")).toBeNull();
   });
@@ -50,18 +50,44 @@ describe("trouverDossier", () => {
 });
 
 describe("courrierARanger", () => {
-  it("ne garde que les accusés et refus pas encore déplacés, avec leur identifiant", () => {
+  it("ne garde que les accusés, refus et entretiens pas encore déplacés, avec leur identifiant", () => {
     const lignes = [
       { message_id_brut: "<a>", nature: "accuse_reception" as const, deplace_at: null, prospection_id: null },
       { message_id_brut: "<b>", nature: "refus" as const, deplace_at: null, prospection_id: "p1" },
       { message_id_brut: "<c>", nature: "refus" as const, deplace_at: "2026-11-03T10:00:00Z", prospection_id: null },
       { message_id_brut: "<d>", nature: "entretien" as const, deplace_at: null, prospection_id: null },
+      { message_id_brut: "<e>", nature: "autre" as const, deplace_at: null, prospection_id: null },
       { message_id_brut: null, nature: "refus" as const, deplace_at: null, prospection_id: null },
     ];
     expect(courrierARanger(lignes)).toEqual([
       { messageIdBrut: "<a>", nature: "accuse_reception", dossier: "attente", liaison: false },
       { messageIdBrut: "<b>", nature: "refus", dossier: "refus", liaison: true },
+      { messageIdBrut: "<d>", nature: "entretien", dossier: "entretiens", liaison: false },
     ]);
+  });
+
+  it("laisse en boîte de réception un accusé qui demande encore une action, mais range une invitation", () => {
+    const lignes = [
+      { message_id_brut: "<a>", nature: "accuse_reception" as const, deplace_at: null, prospection_id: null, action_en_attente: true },
+      { message_id_brut: "<b>", nature: "entretien" as const, deplace_at: null, prospection_id: null, action_en_attente: true },
+    ];
+    expect(courrierARanger(lignes).map((r) => r.messageIdBrut)).toEqual(["<b>"]);
+  });
+});
+
+describe("dossier Entretiens", () => {
+  it("se retrouve par son mot-clé, jamais parmi les dossiers de prospection", () => {
+    const boites = [
+      { path: "Prospection 🥶", name: "Prospection 🥶" },
+      { path: "Entretiens", name: "Entretiens" },
+    ];
+    expect(trouverDossier(boites, "entretiens")).toBe("Entretiens");
+    expect(trouverDossier([{ path: "Entretiens prospection", name: "Entretiens prospection" }], "entretiens")).toBeNull();
+  });
+
+  it("n'étoile que les entretiens", () => {
+    expect(dossierMarqueEtoile("entretiens")).toBe(true);
+    expect(dossierMarqueEtoile("refus")).toBe(false);
   });
 });
 

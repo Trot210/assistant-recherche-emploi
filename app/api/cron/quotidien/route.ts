@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { lireBilanUsage, ouvrirUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { hunterConfigure, lireQuotaHunter } from "@/lib/hunter/client";
-import { classerRecapRecu, dossierDisponible } from "@/lib/mail/dossier";
+import { classerRecapRecu, dossierDisponible, lireLettresRecentes } from "@/lib/mail/dossier";
 import { nettoyerDossiers } from "@/lib/mail/nettoyage";
 import { JOURS_AVANT_NETTOYAGE } from "@/lib/prospection/nettoyage";
 import { imapConfigure } from "@/lib/mail/imap";
+import { estLundi, regrouperLettres } from "@/lib/prospection/lettres-information";
+import { entretiensRecents, mailsAFaire } from "@/lib/prospection/mails-a-faire";
 import { classerEchanges } from "@/lib/prospection/classement-courrier";
 import { detecterReponses } from "@/lib/prospection/detecter-reponses";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
@@ -230,6 +232,32 @@ export async function POST(request: Request) {
     }
   }
 
+  // Mails de candidature à traiter : lus dans la mémoire du tri (aucun appel à la boîte mail ni à Claude). Si la
+  // migration 0027 n'est pas appliquée, la requête échoue et ces deux blocs sont simplement absents.
+  const { data: lignesCourrier, error: courrierError } = await supabase
+    .from("courrier_candidatures")
+    .select("nature, expediteur, sujet, resume, date_mail, action_requise, action_texte, action_lien, action_faite_at")
+    .eq("user_id", userId)
+    .or("nature.eq.entretien,action_requise.eq.true")
+    .gte("date_mail", new Date(Date.now() - 30 * 86_400_000).toISOString())
+    .limit(100);
+  const lignesATraiter = courrierError ? [] : (lignesCourrier ?? []);
+
+  // Bilan du lundi : lettres d'information de la semaine et liens de désinscription (lecture seule).
+  const lettresDeLaSemaine =
+    !simulation && estLundi(aujourdhui) && dossierDisponible()
+      ? await avecDelai(
+          lireLettresRecentes({ jours: 7 })
+            .then(regrouperLettres)
+            .catch((e): null => {
+              console.error("Lecture des lettres d'information impossible:", e);
+              return null;
+            }),
+          15_000,
+          null,
+        )
+      : null;
+
   const donnees: DonneesRecap = {
     aujourdhui,
     urlSite: new URL(request.url).origin,
@@ -245,6 +273,9 @@ export async function POST(request: Request) {
       .map((p) => ({ entreprise: nomEntreprise.get(p.entreprise_id) ?? "Entreprise", action: p.prochaine_action as string, date: p.prochaine_action_date })),
     envoisDuJour: (envoisDuJour ?? []).map((e) => ({ entreprise: entrepriseDe(e.prospection_id), heure: decomposerParis(new Date(e.prevu_at)).heure })),
     envoisEchoues: (envoisEchoues ?? []).map((e) => ({ entreprise: entrepriseDe(e.prospection_id), raison: e.erreur ?? "raison inconnue" })),
+    entretiens: entretiensRecents(lignesATraiter, new Date(), 2).map((e) => ({ expediteur: e.expediteur, sujet: e.sujet })),
+    mailsAFaire: mailsAFaire(lignesATraiter).map((m) => ({ expediteur: m.expediteur, action: m.action, lien: m.lien })),
+    lettresDeLaSemaine: lettresDeLaSemaine ?? undefined,
     nouvellesOffres: (offresRecentes ?? []).filter((o) => offrePertinente(o.titre)).length,
     prioritaires: prioritaires.map((x) => ({
       nom: x.nom,

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classerCourrierCandidature } from "@/lib/anthropic/courrier-candidature";
 import { lireCandidatsBoite, rangerCourrier, type BilanDossier, type CourrierLu } from "@/lib/mail/dossier";
-import { courrierARanger, debutDuTri, type CleDossier, type NatureCourrier } from "@/lib/prospection/courrier-candidatures";
+import { courrierARanger, debutDuTri, dossierMarqueEtoile, type CleDossier, type NatureCourrier } from "@/lib/prospection/courrier-candidatures";
 import { rapprocher, type EnvoiConnu } from "@/lib/prospection/reponses";
 import type { Database } from "@/types/database.types";
 
@@ -18,6 +18,7 @@ export interface LigneCourrier {
   resume: string;
   date: string | null;
   prospection: boolean;
+  action: string | null;
 }
 
 export interface BilanAnalyse {
@@ -80,7 +81,7 @@ export async function analyserCourrier(
 
   const traiter = async (c: CourrierLu) => {
     try {
-      const { nature, resume } = await classerCourrierCandidature({ expediteur: c.fromEmail, sujet: c.sujet, texte: c.texte });
+      const { nature, resume, actionRequise, action, lien } = await classerCourrierCandidature({ expediteur: c.fromEmail, sujet: c.sujet, texte: c.texte });
       const lie = rapprocher(
         { messageId: c.messageId, inReplyTo: c.inReplyTo, references: c.references, fromEmail: c.fromEmail, fromNom: c.fromNom, date: c.date, sujet: c.sujet, texte: "" },
         envois,
@@ -95,8 +96,11 @@ export async function analyserCourrier(
         resume,
         date_mail: c.date.toISOString(),
         prospection_id: lie?.prospectionId ?? null,
+        action_requise: actionRequise,
+        action_texte: action,
+        action_lien: lien,
       });
-      lignes.push({ expediteur: c.fromNom ?? c.fromEmail, sujet: c.sujet, nature, resume, date: c.date.toISOString().slice(0, 10), prospection: lie !== null });
+      lignes.push({ expediteur: c.fromNom ?? c.fromEmail, sujet: c.sujet, nature, resume, date: c.date.toISOString().slice(0, 10), prospection: lie !== null, action });
     } catch (e) {
       // Un message qui n'a pas pu être lu est simplement retenté au passage suivant.
       console.error("Lecture d'un mail de candidature impossible:", e);
@@ -106,35 +110,55 @@ export async function analyserCourrier(
   for (let i = 0; i < lus.length; i += CONCURRENCE) await Promise.all(lus.slice(i, i + CONCURRENCE).map(traiter));
 
   if (aMemoriser.length > 0) {
-    const { error } = await supabase.from("courrier_candidatures").upsert(aMemoriser, { onConflict: "user_id,message_id" });
+    let { error } = await supabase.from("courrier_candidatures").upsert(aMemoriser, { onConflict: "user_id,message_id" });
+    if (error) {
+      // Migration 0027 pas encore appliquée : on mémorise sans les champs d'action plutôt que de perdre le classement.
+      const sansAction = aMemoriser.map(({ action_requise: _a, action_texte: _t, action_lien: _l, ...reste }) => reste);
+      ({ error } = await supabase.from("courrier_candidatures").upsert(sansAction, { onConflict: "user_id,message_id" }));
+    }
     if (error) console.error("Mémorisation des mails de candidature impossible:", error.message);
   }
   return { lignes, restants };
 }
 
 export interface BilanRangement {
-  aRanger: { attente: number; refus: number };
+  aRanger: { attente: number; refus: number; entretiens: number };
   ranges: number;
   bilan: BilanDossier | null;
 }
 
-// Classés comme accusé de réception ou refus et pas encore rangés : `apercu` les compte, sinon les
+// Classés comme accusé de réception, refus ou invitation à un entretien et pas encore rangés : `apercu` les compte, sinon les
 // déplace (jamais plus de 60 par passage).
 export async function rangerCourrierAnalyse(supabase: SupabaseClient<Database>, userId: string, options: { apercu: boolean }): Promise<BilanRangement> {
-  const { data: lignes } = await supabase
-    .from("courrier_candidatures")
-    .select("message_id, message_id_brut, nature, deplace_at, prospection_id")
-    .eq("user_id", userId)
-    .is("deplace_at", null)
-    .in("nature", ["accuse_reception", "refus"])
-    .limit(60);
+  const requete = (colonnes: string) =>
+    supabase.from("courrier_candidatures").select(colonnes).eq("user_id", userId).is("deplace_at", null).in("nature", ["accuse_reception", "refus", "entretien"]).limit(60);
+  type LigneARanger = Pick<Database["public"]["Tables"]["courrier_candidatures"]["Row"], "message_id" | "message_id_brut" | "nature" | "deplace_at" | "prospection_id"> &
+    Partial<Pick<Database["public"]["Tables"]["courrier_candidatures"]["Row"], "action_requise" | "action_faite_at">>;
+  let { data: lignes } = (await requete("message_id, message_id_brut, nature, deplace_at, prospection_id, action_requise, action_faite_at")) as unknown as { data: LigneARanger[] | null; error: unknown };
+  if (!lignes) {
+    // Migration 0027 pas encore appliquée : lecture sans les champs d'action.
+    ({ data: lignes } = (await requete("message_id, message_id_brut, nature, deplace_at, prospection_id")) as unknown as { data: LigneARanger[] | null });
+  }
 
-  const aRanger = courrierARanger((lignes ?? []).map((l) => ({ message_id_brut: l.message_id_brut, nature: l.nature, deplace_at: l.deplace_at, prospection_id: l.prospection_id })));
-  const compte = { attente: aRanger.filter((r) => r.dossier === "attente").length, refus: aRanger.filter((r) => r.dossier === "refus").length };
+  const aRanger = courrierARanger(
+    (lignes ?? []).map((l) => ({
+      message_id_brut: l.message_id_brut,
+      nature: l.nature,
+      deplace_at: l.deplace_at,
+      prospection_id: l.prospection_id,
+      action_en_attente: l.action_requise === true && !l.action_faite_at,
+    })),
+  );
+  const compte = {
+    attente: aRanger.filter((r) => r.dossier === "attente").length,
+    refus: aRanger.filter((r) => r.dossier === "refus").length,
+    entretiens: aRanger.filter((r) => r.dossier === "entretiens").length,
+  };
   if (options.apercu || aRanger.length === 0) return { aRanger: compte, ranges: 0, bilan: null };
 
-  const plan = (["attente", "refus"] as CleDossier[]).map((dossier) => ({
+  const plan = (["attente", "refus", "entretiens"] as CleDossier[]).map((dossier) => ({
     dossier,
+    etoile: dossierMarqueEtoile(dossier),
     ids: aRanger.filter((r) => r.dossier === dossier).map((r) => r.messageIdBrut),
     aussiProspection: new Set(aRanger.filter((r) => r.dossier === dossier && r.liaison).map((r) => r.messageIdBrut)),
   }));

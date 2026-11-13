@@ -1,5 +1,6 @@
 import { formaterUsd } from "@/lib/anthropic/tarifs";
 import { formaterDateFr } from "@/lib/prospection/dates";
+import type { ExpediteurLettres } from "@/lib/prospection/lettres-information";
 
 // Texte du récapitulatif du matin, envoyé par e-mail à l'utilisateur seul.
 // Calcul pur : il ne contient que des noms d'entreprises et des compteurs, jamais
@@ -19,6 +20,12 @@ export interface DonneesRecap {
   // Envois programmés prévus aujourd'hui (information) et envois programmés échoués (à traiter).
   envoisDuJour?: { entreprise: string; heure: string }[];
   envoisEchoues?: { entreprise: string; raison: string }[];
+  // Invitations à un entretien reçues ces derniers jours (rangées dans « Entretiens »).
+  entretiens?: { expediteur: string; sujet: string }[];
+  // Mails de candidature qui demandent une action de ta part et ne sont pas marqués « fait ».
+  mailsAFaire?: { expediteur: string; action: string; lien: string | null }[];
+  // Bilan du lundi : lettres d'information de la semaine, par expéditeur (information, ne compte pas comme une action).
+  lettresDeLaSemaine?: ExpediteurLettres[];
   nouvellesOffres: number;
   prioritaires: { nom: string; score: number; resume: string }[];
   coutMoisUsd: number | null;
@@ -44,7 +51,9 @@ export function construireRecap(d: DonneesRecap): Recap | null {
     d.relancesRestantes.length +
     (d.nouvellesReponses > 0 ? 1 : 0) +
     d.actionsDuJour.length +
-    (d.envoisEchoues?.length ?? 0);
+    (d.envoisEchoues?.length ?? 0) +
+    (d.entretiens?.length ?? 0) +
+    (d.mailsAFaire?.length ?? 0);
   // Les relances déjà préparées sont aussi à valider : elles figurent dans aValider.
   if (nbActions === 0) return null;
 
@@ -53,6 +62,18 @@ export function construireRecap(d: DonneesRecap): Recap | null {
   if (d.nouvellesReponses > 0) {
     blocs.push(
       `RÉPONSES\n${d.nouvellesReponses} nouveau${d.nouvellesReponses > 1 ? "x" : ""} message${d.nouvellesReponses > 1 ? "s" : ""} d'entreprises à qui tu as écrit. Ouvre « Aujourd'hui » et clique sur « Chercher les réponses » pour les classer.`,
+    );
+  }
+
+  if (d.entretiens && d.entretiens.length > 0) {
+    blocs.push(
+      `ENTRETIENS (${d.entretiens.length})\nRangés dans « Entretiens » avec une étoile : réponds vite.\n${d.entretiens.map((e) => `- ${e.expediteur} — ${e.sujet}`).join("\n")}`,
+    );
+  }
+
+  if (d.mailsAFaire && d.mailsAFaire.length > 0) {
+    blocs.push(
+      `À FAIRE DANS TES MAILS (${d.mailsAFaire.length})\n${d.mailsAFaire.slice(0, 8).map((m) => `- ${m.expediteur} — ${m.action}${m.lien ? `\n  ${m.lien}` : ""}`).join("\n")}\nQuand c'est fait, clique sur « Fait » dans « Aujourd'hui ».`,
     );
   }
 
@@ -97,6 +118,13 @@ export function construireRecap(d: DonneesRecap): Recap | null {
     complements.push(
       `À écrire en premier :\n${d.prioritaires.map((p) => `- ${p.nom} (priorité ${p.score}/100) : ${p.resume}`).join("\n")}`,
     );
+  }
+  if (d.lettresDeLaSemaine && d.lettresDeLaSemaine.length > 0) {
+    const total = d.lettresDeLaSemaine.reduce((somme, l) => somme + l.nombre, 0);
+    const lignes = d.lettresDeLaSemaine
+      .slice(0, 8)
+      .map((l) => `- ${l.nom} : ${l.nombre} mail${pluriel(l.nombre, "", "s")}${l.lien ? `\n  Se désinscrire : ${l.lien}` : ""}`);
+    complements.push(`Lettres d'information de la semaine (${total} mail${pluriel(total, "", "s")}, ${d.lettresDeLaSemaine.length} expéditeur${pluriel(d.lettresDeLaSemaine.length, "", "s")}) :\n${lignes.join("\n")}`);
   }
   if (complements.length > 0) blocs.push(`EN PLUS\n${complements.join("\n")}`);
 
