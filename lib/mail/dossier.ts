@@ -1,6 +1,6 @@
 import type { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { creerClientImap, imapConfigure, texteDepuisHtml } from "@/lib/mail/imap";
+import { corpsDuMessage, creerClientImap, imapConfigure } from "@/lib/mail/imap";
 import { debutDesAlertes, estAlerteEmploi, trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
 import { estCandidatPossible, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
 import { normaliserIdMessage, listerIdsMessages, type ReponseBrute } from "@/lib/prospection/reponses";
@@ -271,6 +271,10 @@ export async function classerRecapRecu(messageId: string): Promise<void> {
 
 // --- Mails de candidature de la boîte de réception ------------------------------
 
+// Les mails de recrutement embarquent souvent un gros logo en base64 AVANT leur texte (plus de 400 Ko
+// pour un mail de quelques lignes) : lus à 150 Ko, ils sont coupés avant le texte et paraissent vides.
+const TAILLE_MAX_COURRIER = 900_000;
+
 export interface CourrierLu {
   messageId: string;
   messageIdBrut: string;
@@ -319,14 +323,14 @@ export async function lireCandidatsBoite(params: {
 
       const lus: CourrierLu[] = [];
       if (aLire.length > 0) {
-        for await (const m of client.fetch(aLire.map((c) => c.uid), { uid: true, source: { maxLength: 150_000 } }, { uid: true })) {
+        for await (const m of client.fetch(aLire.map((c) => c.uid), { uid: true, source: { maxLength: TAILLE_MAX_COURRIER } }, { uid: true })) {
           if (!m.source) continue;
           const analyse = await simpleParser(m.source);
           const idBrut = analyse.messageId?.trim();
           const id = normaliserIdMessage(idBrut);
           const de = analyse.from?.value[0];
           if (!idBrut || !id || !de?.address) continue;
-          const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
+          const brut = corpsDuMessage(analyse);
           lus.push({
             messageId: id,
             messageIdBrut: idBrut,

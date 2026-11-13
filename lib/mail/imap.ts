@@ -34,6 +34,7 @@ export class ImapNonConfigure extends Error {
 export function texteDepuisHtml(html: string): string {
   return html
     .replace(/<(script|style)[\s\S]*?<\/\1>/gi, " ")
+    .replace(/<img\b[^>]*>/gi, " ")
     .replace(/<br\s*\/?>|<\/(p|div|li|tr)>/gi, "\n")
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
@@ -58,6 +59,22 @@ export function creerClientImap(): ImapFlow {
     greetingTimeout: 10_000,
     socketTimeout: 40_000,
   });
+}
+
+// Texte d'un message analysé : la partie texte quand elle existe, sinon le HTML converti. Certains messages
+// (courriels de recrutement) n'ont qu'un corps HTML et une partie texte réduite à un espace : elle ne doit pas
+// masquer le HTML, sinon le message est lu comme vide.
+export function corpsDuMessage(analyse: { text?: string | null; html?: string | false | null }): string {
+  const texte = sansImagesIntegrees(analyse.text ?? "");
+  if (texte.trim().length >= 20) return texte;
+  return typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : texte;
+}
+
+// Les images intégrées au message (logo en base64) sont parfois recopiées dans la partie texte, sous la forme
+// « [data:image/png;base64,...] » de plusieurs centaines de Ko : elles noient le vrai texte, qui se retrouve
+// bien au-delà de la limite lue. On les retire.
+export function sansImagesIntegrees(texte: string): string {
+  return texte.replace(/\[?data:[a-z]+\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=\s]*\]?/gi, " ");
 }
 
 const TAILLE_MAX_MESSAGE = 150_000;
@@ -121,7 +138,7 @@ export async function lireReponsesCandidates(params: ParametresLecture): Promise
           const adresse = expediteur.address.trim().toLowerCase();
           if (adresse === moi) continue;
 
-          const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
+          const brut = corpsDuMessage(analyse);
           trouvees.set(id, {
             messageId: id,
             messageIdBrut: analyse.messageId?.trim() || undefined,
@@ -196,7 +213,7 @@ export async function lireRebonds(params: ParametresRebonds): Promise<RebondBrut
             .filter((a) => /delivery-status/i.test(a.contentType))
             .map((a) => a.content.toString("utf8"))
             .join("\n");
-          const brut = analyse.text ?? (typeof analyse.html === "string" ? texteDepuisHtml(analyse.html) : "");
+          const brut = corpsDuMessage(analyse);
 
           trouves.set(id, {
             messageId: id,
