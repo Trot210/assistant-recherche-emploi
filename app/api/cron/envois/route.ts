@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { lireBilanUsage, plafondAtteint, suivreUsage } from "@/lib/anthropic/usage";
 import { classerEchanges } from "@/lib/prospection/classement-courrier";
 import { analyserCourrier, rangerCourrierAnalyse } from "@/lib/prospection/service-courrier";
-import { dossierDisponible, rangerAlertesEmploi } from "@/lib/mail/dossier";
+import { dossierDisponible, rangerCourrierAutomatique } from "@/lib/mail/dossier";
 import { decomposerParis } from "@/lib/prospection/planification";
 import { executerEnvoisDus } from "@/lib/prospection/programmations";
 
@@ -45,15 +45,15 @@ export async function POST(request: Request) {
     // jours (accusés de réception, refus) sont lus (5 au plus, par Claude) puis rangés dans « En attente
     // réponse » et « Refus ». Jamais bloquant.
     let courrier: { ranges: number } | null = null;
-    let alertes: { rangees: number } | null = null;
+    let rangement: { alertes: number; temporaires: number; lettres: number } | null = null;
     if (dossierDisponible() && Number(decomposerParis(new Date()).heure.split(":")[1]) % 10 === 5) {
-      // Les alertes des sites d'annonces vont dans « Alertes emploi » (sans Claude, quelques secondes).
+      // Alertes emploi, mails temporaires et lettres d'information vont dans leurs dossiers (sans Claude, quelques secondes).
       try {
-        const a = await Promise.race([rangerAlertesEmploi({ jours: 2 }), new Promise<null>((resolve) => setTimeout(() => resolve(null), 12_000))]);
-        alertes = a ? { rangees: a.rangees } : null;
-        if (a && a.erreurs.length > 0) console.error("Rangement des alertes emploi:", a.erreurs.join(" ; "));
+        const a = await Promise.race([rangerCourrierAutomatique({ jours: 2 }), new Promise<null>((resolve) => setTimeout(() => resolve(null), 12_000))]);
+        rangement = a ? { alertes: a.alertes, temporaires: a.temporaires, lettres: a.lettres } : null;
+        if (a && a.erreurs.length > 0) console.error("Rangement automatique des mails:", a.erreurs.join(" ; "));
       } catch (e) {
-        console.error("Rangement des alertes emploi impossible:", e);
+        console.error("Rangement automatique des mails impossible:", e);
       }
       try {
         suivreUsage(supabase, userId, "courrier-candidatures");
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
         console.error("Tri des mails de candidature impossible:", e);
       }
     }
-    return NextResponse.json({ ...bilan, classement, courrier, alertes });
+    return NextResponse.json({ ...bilan, classement, courrier, rangement });
   } catch (e) {
     console.error("Erreur du planificateur d'envois:", e);
     return NextResponse.json({ error: e instanceof Error ? e.message : "Erreur inconnue" }, { status: 500 });

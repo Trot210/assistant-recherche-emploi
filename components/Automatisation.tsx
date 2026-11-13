@@ -304,9 +304,9 @@ export default function Automatisation() {
         )}
       </div>
       <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--line)" }}>
-        <h3 style={{ marginBottom: 6 }}>Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi »</h3>
+        <h3 style={{ marginBottom: 6 }}>Nettoyage des dossiers « Refus », « En attente réponse », « Alertes emploi », « Lettres d&apos;information » et « Mails temporaires »</h3>
         <p className="prospection-meta" style={{ marginBottom: 8 }}>
-          Un mail reçu il y a plus de 30 jours est mis à la corbeille de ta boîte mail, une fois par jour : tu peux l&apos;y récupérer, et ce site
+          Un mail reçu il y a plus de 30 jours (2 jours pour « Mails temporaires » : mots de passe et codes) est mis à la corbeille de ta boîte mail, une fois par jour : tu peux l&apos;y récupérer, et ce site
           n&apos;efface rien définitivement ni ne vide la corbeille (Gmail l&apos;efface lui-même après 30 jours de plus). Un mail aussi rangé dans
           « Prospection » est seulement retiré du dossier et reste dans « Prospection ». Le délai part de la date de réception du mail.
         </p>
@@ -335,7 +335,7 @@ export default function Automatisation() {
           <div style={{ marginTop: 8 }}>
             {nettoyage.apercu ? (
               <p className="prospection-meta">
-                {nettoyage.lignes.length === 0 ? "Rien à nettoyer : aucun mail n'a plus de 30 jours dans ces dossiers." : `${nettoyage.lignes.length} mail(s) de plus de 30 jours :`}
+                {nettoyage.lignes.length === 0 ? "Rien à nettoyer : aucun mail n'a dépassé sa durée de conservation dans ces dossiers." : `${nettoyage.lignes.length} mail(s) ont dépassé leur durée de conservation :`}
               </p>
             ) : (
               <p className="prospection-info">

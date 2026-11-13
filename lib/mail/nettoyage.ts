@@ -2,14 +2,15 @@ import { creerClientImap } from "@/lib/mail/imap";
 import { NOM_DOSSIER } from "@/lib/mail/dossier";
 import { trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
 import { trouverDossier } from "@/lib/prospection/courrier-candidatures";
+import { JOURS_MAILS_TEMPORAIRES, trouverDossierLettres, trouverDossierTemporaires } from "@/lib/prospection/courrier-automatique";
 import { actionDeNettoyage, dateLimiteNettoyage, type ActionNettoyage } from "@/lib/prospection/nettoyage";
 import { normaliserIdMessage } from "@/lib/prospection/reponses";
 
-// Nettoyage des dossiers « Refus », « En attente réponse » et « Alertes emploi » : les mails reçus il y a plus de 30 jours
+// Nettoyage des dossiers « Refus », « En attente réponse », « Alertes emploi », « Lettres d'information » (30 jours) et « Mails temporaires » (2 jours)
 // sont mis à la CORBEILLE de Gmail (récupérables ; Gmail les efface lui-même définitivement après
 // 30 jours de plus). Ce code n'efface jamais rien définitivement et ne vide jamais la corbeille.
 // Un mail aussi rangé dans « Prospection » est seulement retiré du dossier, pour rester dans
-// « Prospection ». Seuls ces trois dossiers sont touchés : jamais la boîte de réception ni les envoyés.
+// « Prospection ». Seuls ces cinq dossiers sont touchés : jamais la boîte de réception ni les envoyés.
 
 const MAX_PAR_PASSAGE = 100;
 
@@ -31,7 +32,6 @@ export interface BilanNettoyage {
 
 export async function nettoyerDossiers(options: { jours: number; apercu: boolean }): Promise<BilanNettoyage> {
   const bilan: BilanNettoyage = { apercu: options.apercu, lignes: [], corbeille: 0, retires: 0, erreurs: [] };
-  const limite = dateLimiteNettoyage(new Date(), options.jours);
 
   const client = creerClientImap();
   await client.connect();
@@ -57,13 +57,17 @@ export async function nettoyerDossiers(options: { jours: number; apercu: boolean
     }
 
     let restant = MAX_PAR_PASSAGE;
-    const dossiers: { libelle: string; chemin: string | null }[] = [
-      { libelle: "En attente réponse", chemin: trouverDossier(boites, "attente") },
-      { libelle: "Refus", chemin: trouverDossier(boites, "refus") },
-      { libelle: "Alertes emploi", chemin: trouverDossierAlertes(boites) },
+    // Durée avant la corbeille : 30 jours, sauf les mails temporaires (mots de passe, codes) : 2 jours.
+    const dossiers: { libelle: string; chemin: string | null; jours: number }[] = [
+      { libelle: "En attente réponse", chemin: trouverDossier(boites, "attente"), jours: options.jours },
+      { libelle: "Refus", chemin: trouverDossier(boites, "refus"), jours: options.jours },
+      { libelle: "Alertes emploi", chemin: trouverDossierAlertes(boites), jours: options.jours },
+      { libelle: "Lettres d'information", chemin: trouverDossierLettres(boites), jours: options.jours },
+      { libelle: "Mails temporaires", chemin: trouverDossierTemporaires(boites), jours: JOURS_MAILS_TEMPORAIRES },
     ];
-    for (const { libelle, chemin } of dossiers) {
+    for (const { libelle, chemin, jours } of dossiers) {
       if (!chemin || restant <= 0) continue;
+      const limite = dateLimiteNettoyage(new Date(), jours);
 
       const verrou = await client.getMailboxLock(chemin, { readOnly: options.apercu });
       try {

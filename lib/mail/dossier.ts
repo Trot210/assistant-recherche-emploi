@@ -1,7 +1,16 @@
 import type { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { corpsDuMessage, creerClientImap, imapConfigure } from "@/lib/mail/imap";
-import { debutDesAlertes, estAlerteEmploi, trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
+import { trouverDossierAlertes } from "@/lib/prospection/alertes-emploi";
+import {
+  categorieAutomatique,
+  debutDeCategorie,
+  NOM_DOSSIER_LETTRES,
+  NOM_DOSSIER_TEMPORAIRES,
+  trouverDossierLettres,
+  trouverDossierTemporaires,
+  type CategorieAutomatique,
+} from "@/lib/prospection/courrier-automatique";
 import { estCandidatPossible, trouverDossier, type CleDossier } from "@/lib/prospection/courrier-candidatures";
 import { normaliserIdMessage, listerIdsMessages, type ReponseBrute } from "@/lib/prospection/reponses";
 
@@ -400,40 +409,67 @@ export async function rangerCourrier(
   return { ranges, bilan };
 }
 
-// --- Alertes des sites d'annonces ------------------------------------------------
+// --- Rangement automatique : alertes, mails temporaires, lettres d'information --------------
 
-export interface BilanAlertes {
-  trouvees: number;
-  rangees: number;
+export interface BilanAutomatique {
+  alertes: number;
+  temporaires: number;
+  lettres: number;
   erreurs: string[];
 }
 
-// Range dans le dossier « Alertes emploi » les alertes des sites d'annonces arrivées en boîte de réception
-// depuis `jours` jours (jamais avant la date de début décidée avec l'utilisateur). Aucun appel à Claude :
-// l'expéditeur et l'objet suffisent. Le dossier est celui de l'utilisateur, jamais créé ici.
-export async function rangerAlertesEmploi(params: { jours: number }): Promise<BilanAlertes> {
-  const bilan: BilanAlertes = { trouvees: 0, rangees: 0, erreurs: [] };
+// Range dans les dossiers de l'utilisateur, depuis la boîte de réception et sans appel à Claude : les alertes des
+// sites d'annonces (« Alertes emploi »), les mails à durée de vie courte (« Mails temporaires ») et les lettres
+// d'information (« Lettres d'information »). Seuls comptent les mails reçus depuis `jours` jours, jamais avant la date de
+// début de chaque catégorie. Les dossiers sont ceux de l'utilisateur, jamais créés ici : s'il en manque un, ses mails
+// restent en boîte de réception et l'erreur est signalée.
+export async function rangerCourrierAutomatique(params: { jours: number }): Promise<BilanAutomatique> {
+  const bilan: BilanAutomatique = { alertes: 0, temporaires: 0, lettres: 0, erreurs: [] };
   const client = creerClientImap();
   await client.connect();
   try {
-    const chemin = trouverDossierAlertes(await client.list());
-    if (!chemin) {
-      bilan.erreurs.push("Dossier « Alertes emploi » introuvable dans ta boîte mail");
-      return bilan;
-    }
+    const boites = await client.list();
+    const dossiers: Record<CategorieAutomatique, string | null> = {
+      alerte: trouverDossierAlertes(boites),
+      temporaire: trouverDossierTemporaires(boites),
+      lettre: trouverDossierLettres(boites),
+    };
+    const debuts: Record<CategorieAutomatique, number> = {
+      alerte: debutDeCategorie("alerte", params.jours).getTime(),
+      temporaire: debutDeCategorie("temporaire", params.jours).getTime(),
+      lettre: debutDeCategorie("lettre", params.jours).getTime(),
+    };
+
     const verrou = await client.getMailboxLock("INBOX");
     try {
-      const uids = await client.search({ since: debutDesAlertes(params.jours) }, { uid: true });
+      const uids = await client.search({ since: new Date(Math.min(...Object.values(debuts))) }, { uid: true });
       if (!uids || uids.length === 0) return bilan;
-      const aRanger: number[] = [];
-      for await (const m of client.fetch(uids.slice(-1000), { uid: true, envelope: true }, { uid: true })) {
+
+      const aRanger: Record<CategorieAutomatique, number[]> = { alerte: [], temporaire: [], lettre: [] };
+      for await (const m of client.fetch(uids.slice(-1000), { uid: true, envelope: true, headers: ["list-unsubscribe"] }, { uid: true })) {
         const de = m.envelope?.from?.[0]?.address;
-        if (de && estAlerteEmploi({ expediteur: de, sujet: m.envelope?.subject ?? "" })) aRanger.push(m.uid);
+        if (!de) continue;
+        const categorie = categorieAutomatique({
+          expediteur: de,
+          sujet: m.envelope?.subject ?? "",
+          listeDesinscription: /list-unsubscribe/i.test(m.headers?.toString() ?? ""),
+        });
+        const recu = m.envelope?.date ? new Date(m.envelope.date).getTime() : 0;
+        if (categorie && recu >= debuts[categorie]) aRanger[categorie].push(m.uid);
       }
-      bilan.trouvees = aRanger.length;
-      if (aRanger.length > 0) {
-        await client.messageMove(aRanger, chemin, { uid: true });
-        bilan.rangees = aRanger.length;
+
+      for (const categorie of ["alerte", "temporaire", "lettre"] as CategorieAutomatique[]) {
+        const liste = aRanger[categorie];
+        if (liste.length === 0) continue;
+        const chemin = dossiers[categorie];
+        if (!chemin) {
+          bilan.erreurs.push(`Dossier « ${NOM_PAR_CATEGORIE[categorie]} » introuvable dans ta boîte mail`);
+          continue;
+        }
+        await client.messageMove(liste, chemin, { uid: true });
+        if (categorie === "alerte") bilan.alertes = liste.length;
+        else if (categorie === "temporaire") bilan.temporaires = liste.length;
+        else bilan.lettres = liste.length;
       }
     } finally {
       verrou.release();
@@ -445,3 +481,9 @@ export async function rangerAlertesEmploi(params: { jours: number }): Promise<Bi
   }
   return bilan;
 }
+
+const NOM_PAR_CATEGORIE: Record<CategorieAutomatique, string> = {
+  alerte: "Alertes emploi",
+  temporaire: NOM_DOSSIER_TEMPORAIRES,
+  lettre: NOM_DOSSIER_LETTRES,
+};
