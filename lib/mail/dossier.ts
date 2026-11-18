@@ -6,8 +6,10 @@ import {
   categorieAutomatique,
   debutDeCategorie,
   NOM_DOSSIER_LETTRES,
+  NOM_DOSSIER_RECRUTEURS,
   NOM_DOSSIER_TEMPORAIRES,
   trouverDossierLettres,
+  trouverDossierRecruteurs,
   trouverDossierTemporaires,
   type CategorieAutomatique,
 } from "@/lib/prospection/courrier-automatique";
@@ -418,6 +420,7 @@ export async function rangerCourrier(
 export interface BilanAutomatique {
   alertes: number;
   temporaires: number;
+  recruteurs: number;
   lettres: number;
   erreurs: string[];
 }
@@ -428,7 +431,7 @@ export interface BilanAutomatique {
 // début de chaque catégorie. Les dossiers sont ceux de l'utilisateur, jamais créés ici : s'il en manque un, ses mails
 // restent en boîte de réception et l'erreur est signalée.
 export async function rangerCourrierAutomatique(params: { jours: number }): Promise<BilanAutomatique> {
-  const bilan: BilanAutomatique = { alertes: 0, temporaires: 0, lettres: 0, erreurs: [] };
+  const bilan: BilanAutomatique = { alertes: 0, temporaires: 0, recruteurs: 0, lettres: 0, erreurs: [] };
   const client = creerClientImap();
   await client.connect();
   try {
@@ -436,11 +439,13 @@ export async function rangerCourrierAutomatique(params: { jours: number }): Prom
     const dossiers: Record<CategorieAutomatique, string | null> = {
       alerte: trouverDossierAlertes(boites),
       temporaire: trouverDossierTemporaires(boites),
+      recruteur: trouverDossierRecruteurs(boites),
       lettre: trouverDossierLettres(boites),
     };
     const debuts: Record<CategorieAutomatique, number> = {
       alerte: debutDeCategorie("alerte", params.jours).getTime(),
       temporaire: debutDeCategorie("temporaire", params.jours).getTime(),
+      recruteur: debutDeCategorie("recruteur", params.jours).getTime(),
       lettre: debutDeCategorie("lettre", params.jours).getTime(),
     };
 
@@ -449,7 +454,7 @@ export async function rangerCourrierAutomatique(params: { jours: number }): Prom
       const uids = await client.search({ since: new Date(Math.min(...Object.values(debuts))) }, { uid: true });
       if (!uids || uids.length === 0) return bilan;
 
-      const aRanger: Record<CategorieAutomatique, number[]> = { alerte: [], temporaire: [], lettre: [] };
+      const aRanger: Record<CategorieAutomatique, number[]> = { alerte: [], temporaire: [], recruteur: [], lettre: [] };
       for await (const m of client.fetch(uids.slice(-1000), { uid: true, envelope: true, headers: ["list-unsubscribe"] }, { uid: true })) {
         const de = m.envelope?.from?.[0]?.address;
         if (!de) continue;
@@ -462,17 +467,19 @@ export async function rangerCourrierAutomatique(params: { jours: number }): Prom
         if (categorie && recu >= debuts[categorie]) aRanger[categorie].push(m.uid);
       }
 
-      for (const categorie of ["alerte", "temporaire", "lettre"] as CategorieAutomatique[]) {
+      for (const categorie of ["alerte", "temporaire", "recruteur", "lettre"] as CategorieAutomatique[]) {
         const liste = aRanger[categorie];
         if (liste.length === 0) continue;
         const chemin = dossiers[categorie];
         if (!chemin) {
-          bilan.erreurs.push(`Dossier « ${NOM_PAR_CATEGORIE[categorie]} » introuvable dans ta boîte mail`);
+          // Le dossier « Recruteurs » est facultatif : sans lui, ces mails restent simplement en boîte de réception.
+          if (categorie !== "recruteur") bilan.erreurs.push(`Dossier « ${NOM_PAR_CATEGORIE[categorie]} » introuvable dans ta boîte mail`);
           continue;
         }
         await client.messageMove(liste, chemin, { uid: true });
         if (categorie === "alerte") bilan.alertes = liste.length;
         else if (categorie === "temporaire") bilan.temporaires = liste.length;
+        else if (categorie === "recruteur") bilan.recruteurs = liste.length;
         else bilan.lettres = liste.length;
       }
     } finally {
@@ -518,5 +525,6 @@ export async function lireLettresRecentes(params: { jours: number }): Promise<Le
 const NOM_PAR_CATEGORIE: Record<CategorieAutomatique, string> = {
   alerte: "Alertes emploi",
   temporaire: NOM_DOSSIER_TEMPORAIRES,
+  recruteur: NOM_DOSSIER_RECRUTEURS,
   lettre: NOM_DOSSIER_LETTRES,
 };

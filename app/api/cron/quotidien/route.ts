@@ -15,6 +15,10 @@ import { detecterReponses } from "@/lib/prospection/detecter-reponses";
 import { envoyerEmail, smtpConfigure } from "@/lib/mail/smtp";
 import { offrePertinente } from "@/lib/prospection/offres";
 import { preparerRelance } from "@/lib/prospection/preparer-relance";
+import { ficheAPreparer } from "@/lib/prospection/fiche-entretien";
+import { preparerFicheEntretien } from "@/lib/prospection/service-fiche-entretien";
+import { lireCandidaturesARelancer } from "@/lib/prospection/relance-candidature";
+import { diagnostiquerSante, lireEtatPassage } from "@/lib/prospection/sante";
 import { calculerPriorite } from "@/lib/prospection/priorite";
 import { MAX_RELANCES_PAR_JOUR, relancesAPreparer } from "@/lib/prospection/quotidien";
 import { construireRecap, type DonneesRecap } from "@/lib/prospection/recap";
@@ -29,6 +33,8 @@ export const maxDuration = 60;
 const JOURS_LECTURE_REPONSES = 120;
 // Réponses classées par Claude chaque matin (environ 1 centime chacune).
 const MAX_CLASSEMENTS_MATIN = 4;
+// Fiches de préparation d'entretien rédigées chaque matin (un appel à Claude chacune, quelques centimes).
+const MAX_FICHES_MATIN = 2;
 // La lecture de la boîte mail ne doit jamais retarder le récapitulatif ni dépasser la durée
 // maximale de la route : passé ce délai, on la déclare indisponible ce matin.
 const DELAI_LECTURE_MS = 25_000;
@@ -258,6 +264,35 @@ export async function POST(request: Request) {
         )
       : null;
 
+  // Fiches de préparation pour les invitations à un entretien récentes qui n'en ont pas encore (au plus
+  // MAX_FICHES_MATIN, dans la limite du plafond Claude). Sans la migration 0028, la requête échoue : on passe.
+  if (!simulation && profil) {
+    const { data: entretiensSansFiche, error: ficheError } = await supabase
+      .from("courrier_candidatures")
+      .select("id, nature, date_mail, fiche_entretien")
+      .eq("user_id", userId)
+      .eq("nature", "entretien")
+      .is("fiche_entretien", null)
+      .gte("date_mail", new Date(Date.now() - 14 * 86_400_000).toISOString())
+      .limit(20);
+    const aPreparer = ficheError ? [] : ficheAPreparer(entretiensSansFiche ?? []).slice(0, MAX_FICHES_MATIN);
+    if (aPreparer.length > 0 && !plafond && (await ouvrirUsage(supabase, userId, "fiche-entretien")) === null) {
+      for (const id of aPreparer) {
+        try {
+          const r = await preparerFicheEntretien(supabase, userId, id);
+          if ("erreur" in r) console.error("Fiche d'entretien non préparée (traitement quotidien):", r.erreur);
+        } catch (e) {
+          console.error("Préparation d'une fiche d'entretien impossible (traitement quotidien):", e);
+        }
+      }
+    }
+  }
+
+  // Panne de l'automatisation et candidatures sur offres sans nouvelles : lues dans la base, sans Claude. Si la
+  // migration 0028 n'est pas appliquée, les lectures renvoient simplement des listes vides.
+  const alertesSysteme = diagnostiquerSante(await lireEtatPassage(supabase, userId).catch(() => ({ dernierPassage: null, derniereErreur: null })));
+  const candidaturesARelancer = await lireCandidaturesARelancer(supabase, userId).catch(() => []);
+
   const donnees: DonneesRecap = {
     aujourdhui,
     urlSite: new URL(request.url).origin,
@@ -276,6 +311,8 @@ export async function POST(request: Request) {
     entretiens: entretiensRecents(lignesATraiter, new Date(), 2).map((e) => ({ expediteur: e.expediteur, sujet: e.sujet })),
     mailsAFaire: mailsAFaire(lignesATraiter).map((m) => ({ expediteur: m.expediteur, action: m.action, lien: m.lien })),
     lettresDeLaSemaine: lettresDeLaSemaine ?? undefined,
+    alertesSysteme,
+    candidaturesARelancer: candidaturesARelancer.map((c) => ({ entreprise: c.entreprise, poste: c.titre, jours: c.jours })),
     nouvellesOffres: (offresRecentes ?? []).filter((o) => offrePertinente(o.titre)).length,
     prioritaires: prioritaires.map((x) => ({
       nom: x.nom,

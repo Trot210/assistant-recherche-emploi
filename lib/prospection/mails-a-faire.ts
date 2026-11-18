@@ -3,6 +3,8 @@
 // Calcul pur ; la lecture des lignes est faite par l'appelant (client Supabase du navigateur ou de la tâche du matin).
 
 // Un mail à faire n'est plus proposé au bout de ce délai : s'il traîne, c'est qu'il n'est plus d'actualité.
+import { assainirFiche, type FicheEntretien } from "@/lib/prospection/fiche-entretien";
+
 export const JOURS_MAILS_A_FAIRE = 30;
 // Une invitation à un entretien reste visible ce nombre de jours.
 export const JOURS_ENTRETIENS = 21;
@@ -18,6 +20,8 @@ export interface LigneCourrierBrute {
   action_texte?: string | null;
   action_lien?: string | null;
   action_faite_at?: string | null;
+  // Fiche de préparation déjà rédigée (colonne de la migration 0028).
+  fiche_entretien?: unknown;
 }
 
 export interface MailAFaire {
@@ -30,6 +34,8 @@ export interface MailAFaire {
 }
 
 export interface Entretien {
+  id: string | null;
+  fiche: FicheEntretien | null;
   expediteur: string;
   sujet: string;
   resume: string;
@@ -67,5 +73,12 @@ export function entretiensRecents(lignes: LigneCourrierBrute[], maintenant = new
   return lignes
     .filter((l) => l.nature === "entretien" && recent(l.date_mail, jours, maintenant))
     .sort((a, b) => (b.date_mail ?? "").localeCompare(a.date_mail ?? ""))
-    .map((l) => ({ expediteur: nomExpediteur(l.expediteur), sujet: l.sujet, resume: l.resume, date: l.date_mail }));
+    .map((l) => ({
+      id: l.id ?? null,
+      fiche: assainirFiche(l.fiche_entretien),
+      expediteur: nomExpediteur(l.expediteur),
+      sujet: l.sujet,
+      resume: l.resume,
+      date: l.date_mail,
+    }));
 }

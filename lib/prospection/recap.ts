@@ -26,6 +26,10 @@ export interface DonneesRecap {
   mailsAFaire?: { expediteur: string; action: string; lien: string | null }[];
   // Bilan du lundi : lettres d'information de la semaine, par expéditeur (information, ne compte pas comme une action).
   lettresDeLaSemaine?: ExpediteurLettres[];
+  // Panne ou erreur de l'automatisation (tri des mails qui ne tourne plus, etc.) : toujours signalée en premier.
+  alertesSysteme?: string[];
+  // Candidatures sur offres restées sans nouvelles : relance à envisager (voir « Aujourd'hui »).
+  candidaturesARelancer?: { entreprise: string; poste: string; jours: number }[];
   nouvellesOffres: number;
   prioritaires: { nom: string; score: number; resume: string }[];
   coutMoisUsd: number | null;
@@ -53,11 +57,17 @@ export function construireRecap(d: DonneesRecap): Recap | null {
     d.actionsDuJour.length +
     (d.envoisEchoues?.length ?? 0) +
     (d.entretiens?.length ?? 0) +
-    (d.mailsAFaire?.length ?? 0);
+    (d.mailsAFaire?.length ?? 0) +
+    (d.alertesSysteme?.length ?? 0) +
+    (d.candidaturesARelancer?.length ? 1 : 0);
   // Les relances déjà préparées sont aussi à valider : elles figurent dans aValider.
   if (nbActions === 0) return null;
 
   const blocs: string[] = [];
+
+  if (d.alertesSysteme && d.alertesSysteme.length > 0) {
+    blocs.push(`ATTENTION — AUTOMATISATION\n${d.alertesSysteme.map((a) => `- ${a}`).join("\n")}`);
+  }
 
   if (d.nouvellesReponses > 0) {
     blocs.push(
@@ -74,6 +84,13 @@ export function construireRecap(d: DonneesRecap): Recap | null {
   if (d.mailsAFaire && d.mailsAFaire.length > 0) {
     blocs.push(
       `À FAIRE DANS TES MAILS (${d.mailsAFaire.length})\n${d.mailsAFaire.slice(0, 8).map((m) => `- ${m.expediteur} — ${m.action}${m.lien ? `\n  ${m.lien}` : ""}`).join("\n")}\nQuand c'est fait, clique sur « Fait » dans « Aujourd'hui ».`,
+    );
+  }
+
+  if (d.candidaturesARelancer && d.candidaturesARelancer.length > 0) {
+    const lignes = d.candidaturesARelancer.slice(0, 6).map((c) => `- ${c.entreprise} — ${c.poste} (envoyée il y a ${c.jours} jours)`);
+    blocs.push(
+      `CANDIDATURES SANS NOUVELLES (${d.candidaturesARelancer.length})\nUne relance est envisageable. Ouvre « Aujourd'hui » pour préparer un brouillon.\n${lignes.join("\n")}`,
     );
   }
 

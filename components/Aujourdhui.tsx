@@ -10,7 +10,11 @@ import { calculerPriorite, resumerPriorite } from "@/lib/prospection/priorite";
 import { envoiASurveiller } from "@/lib/prospection/envois-alertes";
 import { formaterProgrammation } from "@/lib/prospection/planification";
 import type { ContactEntreprise, Entreprise, EnvoiProgramme, Prospection } from "@/types/prospection";
+import AlertePanne from "@/components/AlertePanne";
 import Automatisation from "@/components/Automatisation";
+import CandidaturesARelancer from "@/components/CandidaturesARelancer";
+import OutilsBoiteMail from "@/components/OutilsBoiteMail";
+import Statistiques from "@/components/Statistiques";
 import CoutClaude from "@/components/CoutClaude";
 import MailsAFaire from "@/components/MailsAFaire";
 import ReponsesPanel from "@/components/prospection/ReponsesPanel";
@@ -123,6 +127,8 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
         </div>
       </div>
 
+      <AlertePanne />
+
       <CoutClaude detail />
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
@@ -130,6 +136,8 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
       {rien && <p className="track-empty">Rien d&apos;urgent aujourd&apos;hui.</p>}
 
       <MailsAFaire />
+
+      <CandidaturesARelancer />
 
       {aValider.length > 0 && (
         <div className="prospection-bloc">
@@ -285,6 +293,10 @@ export default function Aujourdhui({ imapActif }: { imapActif: boolean }) {
           </Link>
         </div>
       )}
+      <Statistiques />
+
+      <OutilsBoiteMail imapActif={imapActif} />
+
       <Automatisation />
     </div>
   );

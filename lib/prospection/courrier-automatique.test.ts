@@ -3,9 +3,12 @@ import {
   categorieAutomatique,
   debutDeCategorie,
   estLettreInformation,
+  estMailRecruteur,
   estMailTemporaire,
   NOUVELLES_CATEGORIES_DEPUIS,
+  RECRUTEURS_DEPUIS,
   trouverDossierLettres,
+  trouverDossierRecruteurs,
   trouverDossierTemporaires,
 } from "./courrier-automatique";
 
@@ -98,5 +101,50 @@ describe("dossiers", () => {
     expect(trouverDossierTemporaires(boites)).toBe("Mails temporaires");
     expect(trouverDossierLettres(boites)).toBe("Lettres d'information");
     expect(trouverDossierTemporaires([{ path: "INBOX", name: "INBOX" }])).toBeNull();
+  });
+});
+
+describe("estMailRecruteur", () => {
+  it("reconnaît une proposition d'un recruteur ou d'un cabinet", () => {
+    for (const [expediteur, sujet] of [
+      ["contact@cabinet-exemple.example", "Opportunité de poste : chef de projet"],
+      ["hello@talent-exemple.example", "Job opportunity - Project Manager"],
+      ["marie@recrutement-exemple.example", "Nous recrutons : un chargé de mission"],
+    ]) {
+      expect(estMailRecruteur({ expediteur, sujet }), sujet).toBe(true);
+    }
+  });
+
+  it("ne touche pas aux réponses à tes candidatures", () => {
+    for (const sujet of [
+      "Votre candidature pour le poste de chef de projet",
+      "Merci pour votre intérêt pour le poste de chef de projet",
+      "Re: Opportunité de poste",
+      "Suite à votre entretien pour le poste à pourvoir",
+      "Your application for the open position",
+    ]) {
+      expect(estMailRecruteur({ expediteur: "recrutement@recrutement-exemple.example", sujet }), sujet).toBe(false);
+    }
+  });
+
+  it("exige un expéditeur de recrutement, même avec un objet de proposition", () => {
+    expect(estMailRecruteur({ expediteur: "ami@exemple.example", sujet: "Opportunité de poste" })).toBe(false);
+  });
+});
+
+describe("dossier Recruteurs", () => {
+  it("trouve le dossier avec ou sans emoji", () => {
+    expect(trouverDossierRecruteurs([{ path: "Recruteurs", name: "Recruteurs" }])).toBe("Recruteurs");
+    expect(trouverDossierRecruteurs([{ path: "Recruteurs 🤝", name: "Recruteurs 🤝" }])).toBe("Recruteurs 🤝");
+    expect(trouverDossierRecruteurs([{ path: "Autre", name: "Autre" }])).toBeNull();
+  });
+
+  it("ne démarre le classement qu'à partir de la date de lancement", () => {
+    const debut = debutDeCategorie("recruteur", 400, new Date("2026-11-20T10:00:00Z"));
+    expect(debut.getTime()).toBe(new Date(`${RECRUTEURS_DEPUIS}T00:00:00+01:00`).getTime());
+  });
+
+  it("classe un mail de recruteur avant les lettres d'information", () => {
+    expect(categorieAutomatique({ expediteur: "x@cabinet-exemple.example", sujet: "Opportunité de poste", listeDesinscription: true })).toBe("recruteur");
   });
 });

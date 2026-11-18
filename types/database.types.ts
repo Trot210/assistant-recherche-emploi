@@ -201,6 +201,8 @@ export interface Database {
           lm_generee_url: string | null;
           message_motivation: string | null;
           notes: string | null;
+          // Colonne de la migration 0028 : absente tant qu'elle n'est pas appliquée.
+          derniere_relance_at?: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -214,6 +216,7 @@ export interface Database {
           lm_generee_url?: string | null;
           message_motivation?: string | null;
           notes?: string | null;
+          derniere_relance_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -516,6 +519,8 @@ export interface Database {
           action_texte: string | null;
           action_lien: string | null;
           action_faite_at: string | null;
+          fiche_entretien: Json | null;
+          fiche_entretien_at: string | null;
           created_at: string;
         };
         Insert: {
@@ -534,6 +539,8 @@ export interface Database {
           action_texte?: string | null;
           action_lien?: string | null;
           action_faite_at?: string | null;
+          fiche_entretien?: Json | null;
+          fiche_entretien_at?: string | null;
           created_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["courrier_candidatures"]["Insert"]>;
@@ -625,6 +632,8 @@ export interface Database {
           dernier_traitement: string | null;
           envois_max_par_jour: number;
           envois_ecart_minutes: number;
+          courrier_passage_at: string | null;
+          courrier_passage_erreur: string | null;
           updated_at: string;
         };
         Insert: {
@@ -636,6 +645,8 @@ export interface Database {
           dernier_traitement?: string | null;
           envois_max_par_jour?: number;
           envois_ecart_minutes?: number;
+          courrier_passage_at?: string | null;
+          courrier_passage_erreur?: string | null;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["reglages"]["Insert"]>;

@@ -5,7 +5,7 @@ import { estCandidatPossible } from "@/lib/prospection/courrier-candidatures";
 // sites d'annonces (« Alertes emploi »), les mails à durée de vie courte (« Mails temporaires ») et les lettres
 // d'information (« Lettres d'information »). Calcul pur ; la lecture et les déplacements sont dans lib/mail/dossier.ts.
 
-export type CategorieAutomatique = "alerte" | "temporaire" | "lettre";
+export type CategorieAutomatique = "alerte" | "temporaire" | "recruteur" | "lettre";
 
 // Mails dont l'utilité dure un jour ou deux : réinitialisation de mot de passe, code de vérification ou de
 // connexion. On ne retient que des formulations sans ambiguïté ; « confirmez votre adresse » est volontairement
@@ -40,10 +40,29 @@ export function estLettreInformation(params: { expediteur: string; sujet: string
   return !estCandidatPossible({ expediteur: params.expediteur, sujet: params.sujet });
 }
 
-// Première catégorie qui s'applique, dans cet ordre : alerte emploi, mail temporaire, lettre d'information.
+// Mails d'un recruteur ou d'un cabinet qui te contacte de lui-même (« Opportunité de poste… »), à ne pas confondre
+// avec les réponses à tes candidatures. Règle volontairement prudente : il faut À LA FOIS un objet de proposition
+// et un expéditeur de recrutement (adresse ou domaine), et l'objet ne doit pas parler d'une candidature, d'un entretien
+// ni d'un remerciement (ces mails vont au tri des candidatures).
+const SUJET_PROPOSITION =
+  /opportunit[ée]|job opportunity|proposition (de|d['’]) ?(poste|mission|emploi)|nouvelle mission|offre d['’]emploi|poste (de|d['’]|[àa] pourvoir)|[àa] pourvoir|we(?:'|’)re hiring|nous recrutons|votre profil (m['’]a|nous a|correspond|int[ée]resse)|your profile (matches|caught|is)/i;
+const SUJET_REPONSE_OU_CANDIDATURE =
+  /candidature|application|postul|entretien|interview|int[ée]r[êe]t|interest|merci|thank|suite [àa]|^(re|tr|fwd?)\s*:|r[ée]ponse|nous avons bien re[cç]u|facture|invoice/i;
+const EXPEDITEUR_RECRUTEMENT = /@[^@\s>]*(recrut|recruit|talent|staffing|headhunt|chasseur|sourcing|int[ée]rim|cabinet)/i;
+
+export function estMailRecruteur(params: { expediteur: string; sujet: string }): boolean {
+  return (
+    SUJET_PROPOSITION.test(params.sujet) &&
+    !SUJET_REPONSE_OU_CANDIDATURE.test(params.sujet.trim()) &&
+    EXPEDITEUR_RECRUTEMENT.test(params.expediteur)
+  );
+}
+
+// Première catégorie qui s'applique, dans cet ordre : alerte emploi, mail temporaire, recruteur, lettre d'information.
 export function categorieAutomatique(m: { expediteur: string; sujet: string; listeDesinscription: boolean }): CategorieAutomatique | null {
   if (estAlerteEmploi({ expediteur: m.expediteur, sujet: m.sujet })) return "alerte";
   if (estMailTemporaire(m)) return "temporaire";
+  if (estMailRecruteur(m)) return "recruteur";
   if (estLettreInformation(m)) return "lettre";
   return null;
 }
@@ -52,15 +71,24 @@ export function categorieAutomatique(m: { expediteur: string; sujet: string; lis
 // anciens sont laissés tels quels, comme décidé avec l'utilisateur.
 export const NOUVELLES_CATEGORIES_DEPUIS = "2026-11-13";
 
+// Le dossier « Recruteurs » ne reçoit que les mails arrivés à partir de cette date.
+export const RECRUTEURS_DEPUIS = "2026-11-18";
+
 export function debutDeCategorie(categorie: CategorieAutomatique, jours: number, maintenant = new Date()): Date {
   if (categorie === "alerte") return debutDesAlertes(jours, maintenant);
-  const limite = new Date(`${NOUVELLES_CATEGORIES_DEPUIS}T00:00:00+01:00`);
+  const limite = new Date(`${categorie === "recruteur" ? RECRUTEURS_DEPUIS : NOUVELLES_CATEGORIES_DEPUIS}T00:00:00+01:00`);
   const fenetre = new Date(maintenant.getTime() - jours * 86_400_000);
   return fenetre.getTime() > limite.getTime() ? fenetre : limite;
 }
 
 export const NOM_DOSSIER_TEMPORAIRES = "Mails temporaires";
 export const NOM_DOSSIER_LETTRES = "Lettres d'information";
+export const NOM_DOSSIER_RECRUTEURS = "Recruteurs";
+
+// Le nom peut porter un emoji après le mot (« Recruteurs 🤝 »).
+export function trouverDossierRecruteurs(boites: { path: string; name: string }[]): string | null {
+  return boites.find((b) => /^recruteurs?(\s|$)/i.test(b.name.trim()))?.path ?? null;
+}
 
 export function trouverDossierTemporaires(boites: { path: string; name: string }[]): string | null {
   return boites.find((b) => /^mails?\s+temporaires?$/i.test(b.name.trim()))?.path ?? null;

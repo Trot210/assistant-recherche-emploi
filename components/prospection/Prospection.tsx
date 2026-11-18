@@ -39,6 +39,11 @@ interface Props {
 // grossir, il faudrait paginer côté base comme le dashboard des offres.
 export default function Prospection({ userId, hunterActif, smtpActif, imapActif, ongletInitial, filtreInitial }: Props) {
   const supabase = useMemo(() => createClient(), []);
+  // Coût Claude et CV : repliés sur téléphone (la liste passe avant), ouverts sur grand écran.
+  const [reglagesOuverts, setReglagesOuverts] = useState(false);
+  useEffect(() => {
+    setReglagesOuverts(window.matchMedia("(min-width: 641px)").matches);
+  }, []);
   const [onglet, setOnglet] = useState<Onglet>(ongletInitial ?? "entreprises");
   const [filtreMessages, setFiltreMessages] = useState<FiltreMessages>(filtreInitial ?? "en_cours");
   const [entreprises, setEntreprises] = useState<Entreprise[]>([]);
@@ -237,9 +242,15 @@ export default function Prospection({ userId, hunterActif, smtpActif, imapActif,
 
       {erreur && <p className="prospection-erreur" style={{ marginBottom: 14 }}>{erreur}</p>}
 
-      <CoutClaude />
-
-      <CvReference cvs={cvs} onChange={chargerCv} />
+      <details
+        className="prospection-bloc"
+        open={reglagesOuverts}
+        onToggle={(e) => setReglagesOuverts((e.currentTarget as HTMLDetailsElement).open)}
+      >
+        <summary style={{ cursor: "pointer", fontWeight: 600 }}>Coût Claude et mes CV</summary>
+        <CoutClaude />
+        <CvReference cvs={cvs} onChange={chargerCv} />
+      </details>
 
       <div className="prospection-tabs">
         {(

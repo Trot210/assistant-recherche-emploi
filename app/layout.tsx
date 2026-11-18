@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Barlow_Condensed, Inter, IBM_Plex_Mono, Fraunces } from "next/font/google";
 import "./globals.css";
 
@@ -28,8 +28,20 @@ const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-ibm-plex-mono",
 });
 
+// Couleur de la barre d'état quand le site est ouvert depuis l'écran d'accueil ; « cover » laisse le fond
+// passer sous l'encoche (les marges de sécurité sont gérées dans globals.css).
+export const viewport: Viewport = {
+  themeColor: "#a8412b",
+  viewportFit: "cover",
+};
+
 export const metadata: Metadata = {
   title: "Assistant Recherche d'Emploi",
+  // Permet d'ajouter le site à l'écran d'accueil de l'iPhone (Partager → « Sur l'écran d'accueil ») : il s'ouvre
+  // alors en plein écran, sans la barre de Safari. Fichier statique (public/manifest.webmanifest) : aucune donnée
+  // n'est mise en cache hors ligne, le site reste connecté à la base en direct.
+  manifest: "/manifest.webmanifest",
+  appleWebApp: { capable: true, title: "Le Rayon", statusBarStyle: "default" },
   description: "Centralise, score et prépare vos candidatures en Île-de-France.",
   icons: {
     // "?v=1" force les navigateurs à traiter l'icône comme une ressource
